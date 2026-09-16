@@ -23,11 +23,11 @@
   "homepage": "https://adsandcode.com/en/open-source/contentgate/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hahaha821102-droid/contentgate.git",
+    "url": "git+https://github.com/adsandcode/contentgate.git",
     "directory": "mcp"
   },
   "bugs": {
-    "url": "https://github.com/hahaha821102-droid/contentgate/issues"
+    "url": "https://github.com/adsandcode/contentgate/issues"
   },
   "author": "Ads & Code (https://adsandcode.com)",
   "type": "module",

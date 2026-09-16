@@ -23,8 +23,8 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://adsandcode.com/en/open-source/contentgate/"
-Source = "https://github.com/hahaha821102-droid/contentgate"
-Issues = "https://github.com/hahaha821102-droid/contentgate/issues"
+Source = "https://github.com/adsandcode/contentgate"
+Issues = "https://github.com/adsandcode/contentgate/issues"
 
 [project.scripts]
 contentgate = "contentgate.cli:main"

@@ -71,7 +71,7 @@ reorders the table.
 Python 3.8+, standard library only, no dependencies.
 
 ```bash
-git clone https://github.com/hahaha821102-droid/contentgate
+git clone https://github.com/adsandcode/contentgate
 cd contentgate
 python -m contentgate init          # writes contentgate.json
 python -m contentgate check
