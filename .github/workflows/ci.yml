@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install pytest
+      - run: PYTHONPATH=src python -m pytest tests -q
+      - run: PYTHONPATH=src python -m contentgate selftest
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - working-directory: mcp
+        run: npm ci
+      - working-directory: mcp
+        run: npm run build
+      - working-directory: mcp
+        run: npm run selftest
+      - working-directory: mcp
+        run: node scripts/smoke.mjs
+
+  parity:
+    runs-on: ubuntu-latest
+    needs: [python, typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - working-directory: mcp
+        run: npm ci && npm run build
+      # Both implementations run the same fixture file. Their per-case verdicts
+      # must be byte-identical; a difference means one of them has drifted.
+      - run: PYTHONPATH=src python -m contentgate selftest | grep -oE '\[(ok|FAIL)\].*' > /tmp/py.txt
+      - working-directory: mcp
+        run: node dist/selftest.js | grep -oE '\[(ok|FAIL)\].*' > /tmp/ts.txt
+      - run: diff /tmp/py.txt /tmp/ts.txt && echo "implementations agree on every case"

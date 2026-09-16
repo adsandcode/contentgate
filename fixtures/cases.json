@@ -1,0 +1,368 @@
+{
+  "_readme": "Shared negative-test cases. The Python and the TypeScript implementation both run this file and must agree on every verdict. If they disagree, one of them has drifted and CI fails.",
+  "cases": [
+    {
+      "guard": "keywords",
+      "name": "primary keyword appears once, threshold is three",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>web hosting is handy.</p></article>",
+        "scope": ["article", "post"],
+        "keywords": {"web hosting": 640}
+      }
+    },
+    {
+      "guard": "keywords",
+      "name": "spaced variant must not satisfy the unspaced keyword",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>Web Hosting Web Hosting Web Hosting</p></article>",
+        "scope": ["article", "post"],
+        "keywords": {"webhosting": 640}
+      }
+    },
+    {
+      "guard": "keywords",
+      "name": "hits inside an excluded boilerplate block do not count",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>Some tutorial.</p><div class=\"cta\"><p>web hosting web hosting web hosting</p></div></article>",
+        "scope": ["article", "post"],
+        "exclude_classes": ["cta"],
+        "keywords": {"web hosting": 640}
+      }
+    },
+    {
+      "guard": "keywords",
+      "name": "hits inside a script tag do not count",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>Tutorial.</p><script>var s = \"web hosting web hosting web hosting\"</script></article>",
+        "scope": ["article", "post"],
+        "keywords": {"web hosting": 640}
+      }
+    },
+    {
+      "guard": "keywords",
+      "name": "primary three times plus secondary once passes",
+      "expect": "pass",
+      "input": {
+        "html": "<article class=\"post\"><p>web hosting, web hosting, web hosting. See hosting price.</p></article>",
+        "scope": ["article", "post"],
+        "keywords": {"web hosting": 640, "hosting price": 170}
+      }
+    },
+    {
+      "guard": "keywords",
+      "name": "two terms tied at the top volume are both primary, so two hits is not enough",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>alpha alpha alpha, beta beta.</p></article>",
+        "scope": ["article", "post"],
+        "keywords": {"alpha": 250, "beta": 250}
+      }
+    },
+    {
+      "guard": "keywords",
+      "name": "verdict does not depend on the order of keys in the table",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>beta beta, alpha alpha alpha.</p></article>",
+        "scope": ["article", "post"],
+        "keywords": {"beta": 250, "alpha": 250}
+      }
+    },
+    {
+      "guard": "keywords",
+      "name": "matching is case insensitive",
+      "expect": "pass",
+      "input": {
+        "html": "<article class=\"post\"><p>Web Hosting, Web hosting, web HOSTING.</p></article>",
+        "scope": ["article", "post"],
+        "keywords": {"web hosting": 640}
+      }
+    },
+
+    {
+      "guard": "translation",
+      "name": "faithful translation passes",
+      "expect": "pass",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n## 一段\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n<div class=\"warn\"><b>x</b><span>y</span></div>\n\n看 [連結](/blog/abc/)，月費 $19 USDT。\n",
+        "translation": "# Title\n> Summary\n\n## Section\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n<div class=\"warn\"><b>x</b><span>y</span></div>\n\nSee [link](/en/blog/abc/), $19 USDT per month.\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "missing H1 on line one",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n## 一段\n",
+        "translation": "Title\n> Summary\n\n## Section\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "missing summary on line two",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n## 一段\n",
+        "translation": "# Title\nSummary\n\n## Section\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "heading level sequence changed",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n## 一段\n\n### 小節\n",
+        "translation": "# Title\n> Summary\n\n## Section\n\n## Subsection\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "an HTML tag was dropped",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n<div class=\"warn\"><b>x</b></div>\n",
+        "translation": "# Title\n> Summary\n\n<div class=\"warn\">x</div>\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "a table row was dropped",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n",
+        "translation": "# Title\n> Summary\n\n| a | b |\n|---|---|\n| 1 | 2 |\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "a price was changed",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n月費 $19 USDT。\n",
+        "translation": "# Title\n> Summary\n\n$24 USDT per month.\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "a local-currency prefix on the same figure is not a price change",
+      "expect": "pass",
+      "input": {
+        "locale": "pt",
+        "source": "# 標題\n> 摘要\n\n建置 $1,250 USDT。\n",
+        "translation": "# Titulo\n> Resumo\n\nR$1,250 na moeda local, ou $1,250 USDT.\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "internal link lost its locale prefix",
+      "expect": "block",
+      "input": {
+        "locale": "es",
+        "source": "# 標題\n> 摘要\n\n看 [連結](/blog/abc/)。\n",
+        "translation": "# Titulo\n> Resumen\n\nVer [enlace](/blog/abc/).\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "locale prefix applied twice",
+      "expect": "block",
+      "input": {
+        "locale": "es",
+        "source": "# 標題\n> 摘要\n\n看 [連結](/blog/abc/)。\n",
+        "translation": "# Titulo\n> Resumen\n\nVer [enlace](/es/es/blog/abc/).\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "link points at a different page",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n看 [連結](/blog/abc/)。\n",
+        "translation": "# Title\n> Summary\n\nSee [link](/en/blog/xyz/).\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "untranslated source-script characters left behind",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n內文。\n",
+        "translation": "# Title\n> 摘要\n\nBody text.\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "a locale that shares the source script keeps its characters",
+      "expect": "pass",
+      "input": {
+        "locale": "zh-cn",
+        "forbid_source_script": false,
+        "source": "# 標題\n> 摘要\n\n內文。\n",
+        "translation": "# 标题\n> 摘要\n\n内文。\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "em dash introduced that the source did not have",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n內文。\n",
+        "translation": "# Title\n> Summary\n\nBody — text.\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "em dash inherited from the source is not the translator's fault",
+      "expect": "pass",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n內文 — 補充。\n",
+        "translation": "# Title\n> Summary\n\nBody — note.\n"
+      }
+    },
+    {
+      "guard": "translation",
+      "name": "emoji introduced",
+      "expect": "block",
+      "input": {
+        "locale": "en",
+        "source": "# 標題\n> 摘要\n\n內文。\n",
+        "translation": "# Title\n> Summary\n\nBody text 🚀.\n"
+      }
+    },
+
+    {
+      "guard": "internal_links",
+      "name": "no link to any commercial page",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><h2>How it works</h2><p>Text with <a href=\"/blog/other/\">a blog link</a>.</p><p>Price $310 USDT</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/services/", "/pricing/"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "the only commercial link sits in the boilerplate call to action",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><h2>How it works</h2><p>Text.</p><p>$310 USDT</p><div class=\"cta\"><a href=\"/pricing/\">Pricing</a></div></article>",
+        "scope": ["article", "post"],
+        "exclude_classes": ["cta"],
+        "money_paths": ["/services/", "/pricing/"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "commercial link present but no concrete figure",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><h2>Our platform</h2><p>See <a href=\"/pricing/\">pricing</a>, contact us for a quote.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/services/", "/pricing/"],
+        "require_figure": true
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "link plus concrete figure passes",
+      "expect": "pass",
+      "input": {
+        "html": "<article class=\"post\"><h2>Our platform</h2><p>See <a href=\"/pricing/\">pricing</a>. Build is $1,250 USDT.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/services/", "/pricing/"],
+        "require_figure": true
+      }
+    },
+
+    {
+      "guard": "claims",
+      "name": "guaranteed profit claim",
+      "expect": "block",
+      "input": {"text": "This system guarantees profit every month."}
+    },
+    {
+      "guard": "claims",
+      "name": "win rate figure stated as fact",
+      "expect": "block",
+      "input": {"text": "Measured win rate 92% across the sample."}
+    },
+    {
+      "guard": "claims",
+      "name": "a disclaimer that names the forbidden phrase is not a claim",
+      "expect": "pass",
+      "input": {"text": "We do not make guaranteed profit claims."}
+    },
+    {
+      "guard": "claims",
+      "name": "a compliance rule describing what gets blocked is not a claim",
+      "expect": "pass",
+      "input": {"text": "Review will reject wording such as guaranteed win or guaranteed return."}
+    },
+
+    {
+      "guard": "lastmod",
+      "name": "content unchanged, lastmod must not move",
+      "expect": "pass",
+      "input": {
+        "body": "<main>hello</main>",
+        "previous_body": "<main>hello</main>",
+        "previous_lastmod": "2026-01-01",
+        "today": "2026-09-17",
+        "expect_lastmod": "2026-01-01"
+      }
+    },
+    {
+      "guard": "lastmod",
+      "name": "only a volatile block changed, lastmod must not move",
+      "expect": "pass",
+      "input": {
+        "body": "<main>hello</main><div class=\"widget\">visitor 12345</div>",
+        "previous_body": "<main>hello</main><div class=\"widget\">visitor 99</div>",
+        "strip_classes": ["widget"],
+        "previous_lastmod": "2026-01-01",
+        "today": "2026-09-17",
+        "expect_lastmod": "2026-01-01"
+      }
+    },
+    {
+      "guard": "lastmod",
+      "name": "real content changed, lastmod moves to today",
+      "expect": "pass",
+      "input": {
+        "body": "<main>hello world</main>",
+        "previous_body": "<main>hello</main>",
+        "previous_lastmod": "2026-01-01",
+        "today": "2026-09-17",
+        "expect_lastmod": "2026-09-17"
+      }
+    },
+    {
+      "guard": "lastmod",
+      "name": "a stripped class must not hide a real content change",
+      "expect": "pass",
+      "input": {
+        "body": "<main>hello world</main><div class=\"widget\">v 1</div>",
+        "previous_body": "<main>hello</main><div class=\"widget\">v 2</div>",
+        "strip_classes": ["widget"],
+        "previous_lastmod": "2026-01-01",
+        "today": "2026-09-17",
+        "expect_lastmod": "2026-09-17"
+      }
+    }
+  ]
+}

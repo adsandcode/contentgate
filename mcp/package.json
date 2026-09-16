@@ -1,0 +1,63 @@
+{
+  "name": "mcp-server-contentgate",
+  "version": "0.1.0",
+  "description": "MCP server for pre-deploy content checks: target keyword coverage, translation drift across locales, internal links to commercial pages, regulated performance claims, and honest sitemap lastmod.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "ai-agent",
+    "seo",
+    "technical-seo",
+    "content-quality",
+    "i18n",
+    "localization",
+    "translation-qa",
+    "sitemap",
+    "lastmod",
+    "static-site",
+    "ci",
+    "guardrails"
+  ],
+  "license": "MIT",
+  "homepage": "https://adsandcode.com/en/open-source/contentgate/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hahaha821102-droid/contentgate.git",
+    "directory": "mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/hahaha821102-droid/contentgate/issues"
+  },
+  "author": "Ads & Code (https://adsandcode.com)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mcp-server-contentgate": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "fixtures",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "prebuild": "node scripts/sync-fixtures.mjs",
+    "build": "tsc",
+    "selftest": "node dist/selftest.js",
+    "prepublishOnly": "npm run build && npm run selftest && node scripts/smoke.mjs && node scripts/check-publish-ready.mjs",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^5.6.3"
+  }
+}

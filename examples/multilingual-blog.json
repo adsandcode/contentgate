@@ -1,0 +1,41 @@
+{
+  "_comment": "A multilingual static blog: markdown sources per locale, rendered into site/. Adjust the paths to match your own layout.",
+  "root": ".",
+  "scope": ["article", "post"],
+  "exclude_classes": ["cta", "site-footer"],
+  "guards": {
+    "keywords": {
+      "enabled": true,
+      "table": "content/keywords.json",
+      "page_for_slug": "site/blog/{slug}/index.html",
+      "page_for_locale_slug": "site/{locale}/blog/{slug}/index.html",
+      "primary_min_hits": 3
+    },
+    "internal_links": {
+      "enabled": true,
+      "pages": "site/blog/*/index.html",
+      "money_paths": ["/products/", "/plans/"],
+      "require_figure": true,
+      "extra_evidence": []
+    },
+    "translation": {
+      "enabled": true,
+      "source_dir": "content/blog",
+      "locales": ["de", "fr", "ja"],
+      "same_script_locales": [],
+      "native": "content/blog/_native.json"
+    },
+    "claims": {
+      "enabled": false,
+      "pages": "site/**/*.html"
+    },
+    "lastmod": {
+      "enabled": true,
+      "pages": "site/**/index.html",
+      "state": ".contentgate-lastmod.json",
+      "strip_classes": ["build-stamp", "visitor-count"],
+      "strip_patterns": [],
+      "bulk_change_threshold": 0.3
+    }
+  }
+}
