@@ -7,6 +7,8 @@ is left of the page with JavaScript off and fails when too little survives.
 
 What counts:
   - <script> and <style> contents are dropped
+  - <template> elements and elements with the hidden attribute are dropped,
+    children included; aria-hidden is not, since it hides nothing on screen
   - if the page has a <main>, only <main> is read
   - <nav> and <footer> are dropped
   - <wbr> is a line-break opportunity, not a character, so it is removed
@@ -31,10 +33,45 @@ _WBR = re.compile(r"<wbr[" + WS_CLASS + r"]*/?>", re.I | re.A)
 _TAG = re.compile(r"<[^>]+>", re.S)
 _WS_RUN = re.compile("[" + WS_CLASS + "]+")
 
+# A start or end tag, quote-aware so a ">" inside an attribute value does not end it.
+_ANY_TAG = re.compile(r"""<(/?)([a-zA-Z][a-zA-Z0-9-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>""")
+_ATTR_NAME = re.compile(r"""([^\t\n\f\r "'>/=]+)(?:[\t\n\f\r ]*=[\t\n\f\r ]*(?:"[^"]*"|'[^']*'|[^\t\n\f\r "'>]+))?""")
+_VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+         "param", "source", "track", "wbr"}
+
+
+def drop_unrendered(html):
+    """Remove <template> elements and elements carrying the hidden attribute,
+    children included, matching each start tag to its own end tag so nested
+    elements of the same name do not end the region early. aria-hidden is left
+    alone: it hides an element from assistive technology, not from the page."""
+    out, pos = [], 0
+    skipping, depth = None, 0
+    for m in _ANY_TAG.finditer(html):
+        closing, name, rest = m.group(1) == "/", m.group(2).lower(), m.group(3)
+        self_closing = rest.rstrip("\t\n\f\r ").endswith("/")
+        if skipping is None:
+            if closing or self_closing or name in _VOID:
+                continue
+            if name == "template" or "hidden" in {a.lower() for a in _ATTR_NAME.findall(rest)}:
+                out.append(html[pos:m.start()])
+                skipping, depth = name, 1
+            continue
+        if name != skipping or (self_closing and not closing):
+            continue
+        depth += -1 if closing else 1
+        if depth == 0:
+            out.append(" ")
+            pos, skipping = m.end(), None
+    if skipping is not None:
+        return "".join(out) + " "  # never closed: hidden to the end
+    out.append(html[pos:])
+    return "".join(out)
+
 
 def crawler_text(html):
     """Visible text of `html` with JavaScript off, whitespace collapsed."""
-    t = _SCRIPT_STYLE.sub(" ", html)
+    t = drop_unrendered(_SCRIPT_STYLE.sub(" ", html))
     m = _MAIN.search(t)
     if m:
         t = m.group(1)

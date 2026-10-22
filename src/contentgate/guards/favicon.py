@@ -8,8 +8,9 @@ not list (SVG and WebP are the usual cases).
 Accepted rel values are those Google documents: icon (which "shortcut icon"
 contains), apple-touch-icon and apple-touch-icon-precomposed. A <link> counts
 when it comes before </head> or <body>. The format is read from the file
-extension of the href; an icon URL without one of the listed extensions counts
-as unsupported.
+extension of the URL path, ignoring any query string or fragment, or, for a
+data: URI, from its MIME type; an icon whose format cannot be read either way
+counts as unsupported.
 
 Out of scope, because they need the built files or the network: whether the
 file exists, its size, and whether it is square.
@@ -18,7 +19,7 @@ file exists, its size, and whether it is square.
 import re
 
 from ..markup import WS, WS_CLASS, tags, first_wins
-from ..urls import page_parts
+from ..urls import page_parts, split
 
 ICON_RELS = ("icon", "apple-touch-icon", "apple-touch-icon-precomposed")
 # developers.google.com/search/docs/appearance/favicon-in-search lists
@@ -48,8 +49,18 @@ def icons_in_head(html):
     return found
 
 
+SUPPORTED_MIME = ("image/bmp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon", "image/png",
+                  "image/jpeg", "image/x-portable-pixmap", "image/tiff")
+_DATA_MIME = re.compile(r"^data:([^;,]*)", re.I | re.A)
+
+
 def supported(href):
-    return SUPPORTED_EXT.search(_QUERY_OR_FRAGMENT.split(href, 1)[0]) is not None
+    """A data: URI by its MIME type; anything else by the extension of its path."""
+    m = _DATA_MIME.match(href)
+    if m:
+        return m.group(1).strip(WS).lower() in SUPPORTED_MIME
+    path = _QUERY_OR_FRAGMENT.split(split(href)[2], 1)[0]
+    return SUPPORTED_EXT.search(path) is not None
 
 
 def check(html, url):

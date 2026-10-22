@@ -37,8 +37,8 @@
   },
   "author": "Ads & Code (https://adsandcode.com)",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
   "bin": {
     "mcp-server-contentgate": "dist/index.js"
   },

@@ -136,6 +136,23 @@ def test_config_duplicate_sentences(tmp_path):
     assert code == 1 and "/a/ vs /c/" in out
 
 
+def test_config_internal_links_reads_site_hosts(tmp_path):
+    body = '<article class="post"><p>See <a href="https://www.mysite.example/pricing/">pricing</a>.</p></article>'
+    files = {"blog/a/index.html": body}
+    without = {"internal_links": {"enabled": True, "pages": "site/blog/*/index.html",
+                                  "money_paths": ["/pricing/"]}}
+    cfg = _site(tmp_path, files, without)
+    assert run(["check", "--config", cfg])[0] == 1
+    with_hosts = {"internal_links": dict(without["internal_links"], site_hosts=["mysite.example"])}
+    cfg = _site(tmp_path, files, with_hosts)
+    code, out = run(["check", "--config", cfg])
+    assert code == 0, out
+    broad = {"internal_links": dict(without["internal_links"], site_hosts=["pages.dev"])}
+    cfg = _site(tmp_path, files, broad)
+    code, out = run(["check", "--config", cfg])
+    assert code == 1 and "public suffix" in out
+
+
 def test_template_carries_the_new_guards_disabled(tmp_path):
     p = tmp_path / "contentgate.json"
     run(["init", "--config", str(p)])

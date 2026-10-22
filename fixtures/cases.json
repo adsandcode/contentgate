@@ -288,6 +288,111 @@
         "require_figure": true
       }
     },
+    {
+      "guard": "internal_links",
+      "name": "an absolute link to another site's pricing page sells someone else's product",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>Compare <a href=\"https://competitor.example/pricing/\">their pricing</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/services/", "/pricing/"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "an absolute link to the site's own host counts when site_hosts names it",
+      "expect": "pass",
+      "input": {
+        "html": "<article class=\"post\"><p>See <a href=\"https://www.mysite.example/pricing/\">pricing</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"],
+        "site_hosts": ["www.mysite.example"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "a subdomain of a site host is the same site",
+      "expect": "pass",
+      "input": {
+        "html": "<article class=\"post\"><p>See <a href=\"https://shop.mysite.example/pricing/\">pricing</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"],
+        "site_hosts": ["https://mysite.example/"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "without site_hosts an absolute link never counts, even to the site itself",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>See <a href=\"https://www.mysite.example/pricing/\">pricing</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "a host that only ends in the site's name is another site",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>See <a href=\"https://notmysite.example/pricing/\">pricing</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"],
+        "site_hosts": ["mysite.example"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "a backslash cannot dress another site up as a subdomain of this one",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>See <a href=\"https://competitor.example\\.mysite.example/pricing/\">pricing</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"],
+        "site_hosts": ["mysite.example"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "a money path in the query string is not the page the link opens",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>See <a href=\"/blog/?next=/pricing/\">the blog</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "a relative link under a locale prefix still counts",
+      "expect": "pass",
+      "input": {
+        "html": "<article class=\"post\"><p>See <a href=\"/en/pricing/\">pricing</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "a mailto link mentioning the money path is not a page",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p><a href=\"mailto:sales@mysite.example?subject=/pricing/\">Write to sales</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"]
+      }
+    },
+    {
+      "guard": "internal_links",
+      "name": "a hosting suffix in site_hosts is refused",
+      "expect": "block",
+      "input": {
+        "html": "<article class=\"post\"><p>See <a href=\"/pricing/\">pricing</a>.</p></article>",
+        "scope": ["article", "post"],
+        "money_paths": ["/pricing/"],
+        "site_hosts": ["github.io"]
+      }
+    },
 
     {
       "guard": "claims",
@@ -312,6 +417,102 @@
       "name": "a compliance rule describing what gets blocked is not a claim",
       "expect": "pass",
       "input": {"text": "Review will reject wording such as guaranteed win or guaranteed return."}
+    },
+    {
+      "guard": "claims",
+      "name": "a negation of the loss in the next clause does not disclaim the guarantee",
+      "expect": "block",
+      "input": {"text": "保證獲利，絕不會虧損"}
+    },
+    {
+      "guard": "claims",
+      "name": "a review mentioned in another clause does not disclaim the guarantee",
+      "expect": "block",
+      "input": {"text": "本平台經過審查，保證獲利"}
+    },
+    {
+      "guard": "claims",
+      "name": "the negation inside 穩賺不賠 is part of the claim",
+      "expect": "block",
+      "input": {"text": "穩賺不賠，沒有比這更好的"}
+    },
+    {
+      "guard": "claims",
+      "name": "a negation before a comma does not reach the claim after it",
+      "expect": "block",
+      "input": {"text": "We never lie, guaranteed profit every month."}
+    },
+    {
+      "guard": "claims",
+      "name": "not only is not a negation",
+      "expect": "block",
+      "input": {"text": "不僅保證獲利，還送課程"}
+    },
+    {
+      "guard": "claims",
+      "name": "don't miss is not a negation",
+      "expect": "block",
+      "input": {"text": "Don't miss our guaranteed returns."}
+    },
+    {
+      "guard": "claims",
+      "name": "a win rate in full-width digits",
+      "expect": "block",
+      "input": {"text": "實測勝率９２％"}
+    },
+    {
+      "guard": "claims",
+      "name": "the word claims alone does not make a sentence a disclaimer",
+      "expect": "block",
+      "input": {"text": "Our guaranteed profit claims are true."}
+    },
+    {
+      "guard": "claims",
+      "name": "a negator directly before the claim disclaims it",
+      "expect": "pass",
+      "input": {"text": "本平台不保證獲利。"}
+    },
+    {
+      "guard": "claims",
+      "name": "a short verb between negator and claim still disclaims it",
+      "expect": "pass",
+      "input": {"text": "我們不做保證獲利宣稱。"}
+    },
+    {
+      "guard": "claims",
+      "name": "we do not guarantee profit",
+      "expect": "pass",
+      "input": {"text": "We do not guarantee profit."}
+    },
+    {
+      "guard": "claims",
+      "name": "no guaranteed returns",
+      "expect": "pass",
+      "input": {"text": "No guaranteed returns are offered."}
+    },
+    {
+      "guard": "claims",
+      "name": "never promise guaranteed income",
+      "expect": "pass",
+      "input": {"text": "We never promise guaranteed income."}
+    },
+    {
+      "guard": "claims",
+      "name": "a list of phrases named as forbidden is not a claim",
+      "expect": "pass",
+      "input": {"text": "保證獲利、穩賺不賠等字眼一律不得使用。"}
+    },
+    {
+      "guard": "claims",
+      "name": "every item of a governed list shares the exemption",
+      "expect": "pass",
+      "input": {"text": "Avoid phrases like guaranteed win, sure win or risk-free return."}
+    },
+    {
+      "guard": "claims",
+      "name": "a phrase named as banned is not asserted",
+      "expect": "pass",
+      "input": {"text": "Guaranteed profit claims are banned."}
     },
 
     {
@@ -428,6 +629,42 @@
         "html": "<main><p>Wait&hellip; what&hellip; really&hellip; yes&hellip;</p></main>"
       }
     },
+    {
+      "guard": "visible_text",
+      "name": "template content is never rendered",
+      "expect": "block",
+      "input": {
+        "min_chars": 40,
+        "html": "<main><template><p>A long article kept in a template until a script clones it into the page.</p></template><p>Short.</p></main>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "an element with the hidden attribute is dropped with everything inside it",
+      "expect": "block",
+      "input": {
+        "min_chars": 40,
+        "html": "<main><div hidden><p>A long article that stays hidden</p><div>until a script</div> reveals it to the reader.</div><p>Short.</p></main>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "a class named hidden is not the hidden attribute",
+      "expect": "pass",
+      "input": {
+        "min_chars": 40,
+        "html": "<main><div class=\"is hidden\" data-hidden><p>A long article that is visible, whatever its class is called.</p></div></main>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "aria-hidden hides nothing on screen and still counts",
+      "expect": "pass",
+      "input": {
+        "min_chars": 40,
+        "html": "<main><p aria-hidden=\"true\">A long article marked aria-hidden is still on the screen.</p></main>"
+      }
+    },
 
     {
       "guard": "structured_data",
@@ -517,6 +754,46 @@
       "expect": "block",
       "input": {
         "html": "<script type=\"application/ld+json\">[{\"@type\":\"Article\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}},{\"@type\":\"BreadcrumbList\"}]</script><script>window.meta = {\"dateModified\":\"2026-09-01\"};</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a BlogPosting is an Article",
+      "expect": "pass",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"BlogPosting\",\"dateModified\":\"2026-09-01\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}},{\"@type\":\"BreadcrumbList\"}]</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a NewsArticle from a NewsMediaOrganization satisfies Article and Organization",
+      "expect": "pass",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"NewsArticle\",\"dateModified\":\"2026-09-01\",\"publisher\":{\"@type\":\"NewsMediaOrganization\",\"name\":\"P\"}},{\"@type\":\"BreadcrumbList\"}]</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a Restaurant is a LocalBusiness and so an Organization",
+      "expect": "pass",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"Article\",\"dateModified\":\"2026-09-01\",\"publisher\":{\"@type\":\"Restaurant\",\"name\":\"P\"}},{\"@type\":\"BreadcrumbList\"}]</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a Person does not stand in for an Organization",
+      "expect": "block",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"Article\",\"dateModified\":\"2026-09-01\",\"author\":{\"@type\":\"Person\",\"name\":\"A\"}},{\"@type\":\"BreadcrumbList\"}]</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a type name that merely contains Article is not a subtype",
+      "expect": "block",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"MyArticle\",\"dateModified\":\"2026-09-01\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}},{\"@type\":\"BreadcrumbList\"}]</script>"
       }
     },
 
@@ -1014,6 +1291,42 @@
       "input": {
         "url": "https://www.mysite.example/",
         "html": "<html><head><link rel=\"mask-icon\" href=\"/mask.png\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "a data: URI favicon is read by its MIME type",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"icon\" href=\"data:image/png;base64,iVBORw0KGgo=\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "a data: URI SVG favicon is still SVG",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg%3E%3C/svg%3E\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "a host ending in .png is not a PNG file",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"icon\" href=\"https://cdn.example.png\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "an absolute icon URL is read by its path",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"icon\" href=\"https://cdn.example/brand/favicon.ico?v=2\"></head><body></body></html>"
       }
     },
 

@@ -27,7 +27,7 @@ import {
 import { run as runSelftest } from "./selftest.js";
 import type { Scope } from "./html.js";
 
-export const VERSION = "0.2.0";
+import { VERSION } from "./version.js";
 
 const scopeSchema = z.tuple([z.string(), z.string()]).optional()
   .describe('Element to look inside, as [tag, class], e.g. ["article","post"]. Omit to read the whole document.');
@@ -40,6 +40,11 @@ const text = (payload: unknown) => ({
 });
 
 const server = new McpServer({ name: "contentgate", version: VERSION });
+
+const fail = (message: string) => ({
+  isError: true,
+  content: [{ type: "text" as const, text: `configuration problem: ${message}` }],
+});
 
 server.tool(
   "check_keywords",
@@ -86,7 +91,7 @@ server.tool(
 
 server.tool(
   "check_internal_links",
-  "Check that a content page links to at least one commercial page from its body, and optionally that it states a concrete figure. Links inside excluded boilerplate do not count, because a site-wide call-to-action block would otherwise satisfy this on every page and the check would guard nothing.",
+  "Check that a content page links to at least one commercial page of its own site from its body, and optionally that it states a concrete figure. Links inside excluded boilerplate do not count, because a site-wide call-to-action block would otherwise satisfy this on every page and the check would guard nothing. Relative links count; an absolute link counts only when its host is in site_hosts (or a subdomain of one), so a link to another site's /pricing/ page never does. The money path is matched against the link's path, not its query string.",
   {
     html: z.string(),
     money_paths: z.array(z.string()).describe('Path prefixes that count as commercial, e.g. ["/pricing/","/services/"].'),
@@ -96,16 +101,22 @@ server.tool(
       .describe('Also require a concrete price or quantity in the body. "Contact us for a quote" is not an offer.'),
     extra_evidence: z.array(z.string()).default([])
       .describe("Literal strings that satisfy require_figure on their own, such as named product modules."),
+    site_hosts: z.array(z.string()).default([])
+      .describe('Hosts that are this site, e.g. ["www.example.org"]; subdomains included. Without it, absolute http(s) links never count as internal.'),
   },
-  async ({ html, money_paths, scope, exclude_classes, require_figure, extra_evidence }) => {
-    const r = checkInternalLinks(html, money_paths, asScope(scope), exclude_classes, require_figure, extra_evidence);
-    return text({ verdict: r.problems.length ? "block" : "pass", problems: r.problems, commercial_links: r.found });
+  async ({ html, money_paths, scope, exclude_classes, require_figure, extra_evidence, site_hosts }) => {
+    try {
+      const r = checkInternalLinks(html, money_paths, asScope(scope), exclude_classes, require_figure, extra_evidence, site_hosts);
+      return text({ verdict: r.problems.length ? "block" : "pass", problems: r.problems, commercial_links: r.found });
+    } catch (err) {
+      return fail((err as Error).message);
+    }
   },
 );
 
 server.tool(
   "check_claims",
-  "Scan copy for affirmative performance claims of the kind that get finance, health and other regulated advertising rejected: guaranteed profit, stated win rates, promised returns. Sentences that exist to disclaim or prohibit those phrases are not flagged.",
+  "Scan copy for affirmative performance claims of the kind that get finance, health and other regulated advertising rejected: guaranteed profit, stated win rates, promised returns. A disclaimer is not flagged when its negation governs the claim itself, shortly before it in the same clause (不保證獲利, 'we do not guarantee profit', 'no guaranteed returns'), or when the phrase is named as forbidden ('guaranteed profit claims are banned'). A negation elsewhere in the sentence does not count: 保證獲利，絕不會虧損 is still a claim.",
   { text: z.string().describe("Plain text or HTML. HTML tags are ignored.") },
   async ({ text: input }) => {
     const hits = checkClaims(input);
@@ -142,20 +153,15 @@ server.tool(
   async ({ body, strip_classes, strip_patterns }) => text({ hash: contentHash(body, strip_classes, strip_patterns) }),
 );
 
-const fail = (message: string) => ({
-  isError: true,
-  content: [{ type: "text" as const, text: `configuration problem: ${message}` }],
-});
-
 server.tool(
   "audit_page",
   "Page-level SEO/GEO audit of one rendered HTML page, before it ships. Checks: " +
-  "visible_text (characters readable with JavaScript off; Google renders JavaScript, but many AI crawlers read only the HTML the server sent, so an article injected by a script is invisible to them); " +
-  "structured_data (every JSON-LD block parses, required @type values are present, dateModified exists; a ProfilePage is not required to be an Article); " +
-  "outbound_links (external links without rel nofollow, sponsored or ugc, with hosts resolved the way a browser resolves them, so backslash and extra-slash tricks are caught; list editorially cited sites in cite_ok); " +
+  "visible_text (characters readable with JavaScript off, excluding <template> and elements with the hidden attribute; Google renders JavaScript, but many AI crawlers read only the HTML the server sent, so an article injected by a script is invisible to them); " +
+  "structured_data (every JSON-LD block parses, required @type values are present, dateModified exists; a required type is satisfied by its schema.org subtypes, e.g. BlogPosting or NewsArticle for Article; a ProfilePage is not required to be an Article); " +
+  "outbound_links (external links without rel nofollow, sponsored or ugc, with hosts resolved the way a browser resolves them, so backslash and extra-slash tricks are caught. Google does not require any rel on ordinary editorial links, only sponsored on paid or affiliate links and ugc on user-generated ones: do not add nofollow to citations to make this pass; list the sites you cite in cite_ok instead); " +
   "images (<img> without alt or width); " +
   "favicon (home page only: an icon <link> in <head>, in a format Google Search lists); " +
-  "stock_phrases (an editorial style list of filler phrases; not a detector of machine-written text). " +
+  "stock_phrases (an editorial style list of filler phrases, meant to be replaced with your own; not a detector of machine-written text). " +
   "Returns a verdict per check. Pure: nothing is fetched or written.",
   {
     html: z.string().describe("Rendered HTML of the page, as the server sends it."),
@@ -167,9 +173,9 @@ server.tool(
       .describe("structured_data: @type values that must be present."),
     require_date_modified: z.boolean().default(true).describe("structured_data: require a dateModified."),
     cite_ok: z.array(z.string()).default([])
-      .describe('outbound_links: domains you cite editorially, exempt from rel, matched with their subdomains, e.g. ["gov.uk"]. Registries anyone can register under (co.uk, github.io, pages.dev...) are refused. Never list paid or affiliate partners here.'),
+      .describe('outbound_links: domains you cite editorially, matched with their subdomains, e.g. ["gov.uk"]. Ordinary editorial links need no rel, so this is the right fix for a reported citation, not adding nofollow. Registries anyone can register under (co.uk, github.io, pages.dev...) are refused. Never list paid or affiliate partners here: those need rel="sponsored".'),
     stock_phrases: z.array(z.string()).optional()
-      .describe("stock_phrases: phrases to flag, matched case-insensitively. Default: a Traditional Chinese list; supply your own for other languages."),
+      .describe("stock_phrases: phrases to flag, matched case-insensitively. Default: one editor's Traditional Chinese list, whose connectives (因此，, 然而，) also flag ordinary sentences; replace it with your own, and always for other languages."),
   },
   async ({ html, url, checks, min_chars, require_types, require_date_modified, cite_ok, stock_phrases }) => {
     try {

@@ -70,7 +70,8 @@ def run_internal_links(cfg, report):
         problems, found = internal_links.check(
             _read(page), g["money_paths"], cfg.scope, cfg.exclude_classes,
             g.get("require_figure", False),
-            extra_evidence=g.get("extra_evidence", ()))
+            extra_evidence=g.get("extra_evidence", ()),
+            site_hosts=g.get("site_hosts", ()))
         name = page.relative_to(cfg.root).as_posix()
         if problems:
             failures += 1

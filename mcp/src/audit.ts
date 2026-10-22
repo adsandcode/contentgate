@@ -8,7 +8,7 @@
  */
 
 import { WS, WS_CLASS, stripChars, unescape, scanTags, firstWins } from "./html.js";
-import { pageParts, resolveHost, under } from "./urls.js";
+import { pageParts, resolveHost, under, split } from "./urls.js";
 
 export interface CheckResult {
   problems: string[];
@@ -29,9 +29,49 @@ const WBR = new RegExp("<wbr[" + WS_CLASS + "]*/?>", "gi");
 const TAG = /<[^>]+>/g;
 const WS_RUN = new RegExp("[" + WS_CLASS + "]+", "g");
 
+// A start or end tag, quote-aware so a ">" inside an attribute value does not end it.
+const ANY_TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
+const ATTR_NAME = /([^\t\n\f\r "'>/=]+)(?:[\t\n\f\r ]*=[\t\n\f\r ]*(?:"[^"]*"|'[^']*'|[^\t\n\f\r "'>]+))?/g;
+const VOID_TAGS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+  "param", "source", "track", "wbr"]);
+
+/**
+ * Remove <template> elements and elements carrying the hidden attribute,
+ * children included, matching each start tag to its own end tag. aria-hidden
+ * is left alone. See crawler_text.py.
+ */
+export function dropUnrendered(html: string): string {
+  const out: string[] = [];
+  let pos = 0, skipping: string | null = null, depth = 0;
+  for (const m of html.matchAll(ANY_TAG)) {
+    const closing = m[1] === "/", name = m[2].toLowerCase(), rest = m[3];
+    const selfClosing = stripChars(rest, "\t\n\f\r ").endsWith("/");
+    if (skipping === null) {
+      if (closing || selfClosing || VOID_TAGS.has(name)) continue;
+      const attrs = new Set([...rest.matchAll(ATTR_NAME)].map((a) => a[1].toLowerCase()));
+      if (name === "template" || attrs.has("hidden")) {
+        out.push(html.slice(pos, m.index!));
+        skipping = name;
+        depth = 1;
+      }
+      continue;
+    }
+    if (name !== skipping || (selfClosing && !closing)) continue;
+    depth += closing ? -1 : 1;
+    if (depth === 0) {
+      out.push(" ");
+      pos = m.index! + m[0].length;
+      skipping = null;
+    }
+  }
+  if (skipping !== null) return out.join("") + " "; // never closed: hidden to the end
+  out.push(html.slice(pos));
+  return out.join("");
+}
+
 /** Visible text of `html` with JavaScript off, whitespace collapsed. */
 export function crawlerText(html: string): string {
-  let t = html.replace(SCRIPT_STYLE, " ");
+  let t = dropUnrendered(html.replace(SCRIPT_STYLE, " "));
   const m = MAIN.exec(t);
   if (m) t = m[1];
   t = t.replace(NAV_FOOTER, " ").replace(WBR, "").replace(TAG, " ");
@@ -50,6 +90,155 @@ export function checkVisibleText(html: string, minChars = DEFAULT_MIN_CHARS): Ch
 /* ---------------- structured_data ---------------- */
 
 export const DEFAULT_REQUIRE_TYPES = ["Article", "BreadcrumbList", "Organization"];
+
+/**
+ * A required type is satisfied by itself or any type listed under it. Same
+ * table as SUBTYPES in src/contentgate/guards/structured_data.py, which says
+ * where it comes from; tests/test_schema_subtypes.py compares the two.
+ */
+export const SCHEMA_SUBTYPES: Record<string, string[]> = {
+  "Article": [
+    "APIReference",
+    "AdvertiserContentArticle",
+    "AnalysisNewsArticle",
+    "AskPublicNewsArticle",
+    "BackgroundNewsArticle",
+    "BlogPosting",
+    "DiscussionForumPosting",
+    "LiveBlogPosting",
+    "MedicalScholarlyArticle",
+    "NewsArticle",
+    "OpinionNewsArticle",
+    "Report",
+    "ReportageNewsArticle",
+    "ReviewNewsArticle",
+    "SatiricalArticle",
+    "ScholarlyArticle",
+    "SocialMediaPosting",
+    "TechArticle"
+  ],
+  "Organization": [
+    "AccountingService",
+    "Airline",
+    "AnimalShelter",
+    "ArchiveOrganization",
+    "AutoPartsStore",
+    "AutomotiveBusiness",
+    "Bakery",
+    "BankOrCreditUnion",
+    "BarOrPub",
+    "BedAndBreakfast",
+    "BikeStore",
+    "BookStore",
+    "Brewery",
+    "CafeOrCoffeeShop",
+    "Campground",
+    "ChildCare",
+    "ClothingStore",
+    "CollegeOrUniversity",
+    "ComputerStore",
+    "Consortium",
+    "ConvenienceStore",
+    "Cooperative",
+    "Corporation",
+    "DanceGroup",
+    "Dentist",
+    "DepartmentStore",
+    "DiagnosticLab",
+    "Distillery",
+    "DryCleaningOrLaundry",
+    "EducationalOrganization",
+    "ElectronicsStore",
+    "ElementarySchool",
+    "EmergencyService",
+    "EmploymentAgency",
+    "EntertainmentBusiness",
+    "FastFoodRestaurant",
+    "FinancialService",
+    "Florist",
+    "FoodEstablishment",
+    "FundingScheme",
+    "FurnitureStore",
+    "GardenStore",
+    "GovernmentOffice",
+    "GovernmentOrganization",
+    "GroceryStore",
+    "HardwareStore",
+    "HealthAndBeautyBusiness",
+    "HighSchool",
+    "HobbyShop",
+    "HomeAndConstructionBusiness",
+    "HomeGoodsStore",
+    "Hospital",
+    "Hostel",
+    "Hotel",
+    "IceCreamShop",
+    "InsuranceAgency",
+    "InternetCafe",
+    "JewelryStore",
+    "LegalService",
+    "Library",
+    "LibrarySystem",
+    "LiquorStore",
+    "LocalBusiness",
+    "LodgingBusiness",
+    "MedicalBusiness",
+    "MedicalClinic",
+    "MedicalOrganization",
+    "MensClothingStore",
+    "MiddleSchool",
+    "MobilePhoneStore",
+    "Motel",
+    "MovieRentalStore",
+    "MusicGroup",
+    "MusicStore",
+    "NGO",
+    "NewsMediaOrganization",
+    "OfficeEquipmentStore",
+    "OnlineBusiness",
+    "OnlineStore",
+    "OutletStore",
+    "PawnShop",
+    "PerformingGroup",
+    "PetStore",
+    "Pharmacy",
+    "Physician",
+    "PoliticalParty",
+    "Preschool",
+    "ProfessionalService",
+    "Project",
+    "RadioStation",
+    "RealEstateAgent",
+    "RecyclingCenter",
+    "ResearchOrganization",
+    "Resort",
+    "Restaurant",
+    "School",
+    "SearchRescueOrganization",
+    "SelfStorage",
+    "ShoeStore",
+    "ShoppingCenter",
+    "SportingGoodsStore",
+    "SportsActivityLocation",
+    "SportsOrganization",
+    "SportsTeam",
+    "Store",
+    "TelevisionStation",
+    "TheaterGroup",
+    "TireShop",
+    "TouristInformationCenter",
+    "ToyStore",
+    "TravelAgency",
+    "VacationRental",
+    "VeterinaryCare",
+    "WholesaleStore",
+    "Winery",
+    "WorkersUnion"
+  ]
+};
+
+export const satisfiedBy = (required: string, present: Set<string>) =>
+  present.has(required) || (SCHEMA_SUBTYPES[required] ?? []).some((t) => present.has(t));
 
 const LD_BLOCK = /<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi;
 const NESTED = ["author", "publisher", "creator"];
@@ -115,7 +304,7 @@ export function checkStructuredData(
   let wanted = [...requireTypes];
   // ProfilePage covers author pages, which are not articles.
   if (present.has("ProfilePage")) wanted = wanted.filter((t) => t !== "Article");
-  const missing = wanted.filter((t) => !present.has(t));
+  const missing = wanted.filter((t) => !satisfiedBy(t, present));
   const sorted = [...present].sort();
 
   const problems: string[] = [];
@@ -138,7 +327,7 @@ export const TOO_BROAD = new Set([
 const CC_SECOND_LEVEL = /^(?:com|net|org|co|idv)\.[a-z]{2}$/;
 const REL_SPLIT = new RegExp("[" + WS_CLASS + ",]+");
 
-const isPublicSuffixLike = (d: string) => TOO_BROAD.has(d) || CC_SECOND_LEVEL.test(d);
+export const isPublicSuffixLike = (d: string) => TOO_BROAD.has(d) || CC_SECOND_LEVEL.test(d);
 export const tooBroad = (d: string) => !d.includes(".") || isPublicSuffixLike(d);
 
 /** 'https://www.Docs.Example.org/x' -> 'docs.example.org'; '*.a.b' -> 'a.b'. */
@@ -247,7 +436,16 @@ export function iconsInHead(html: string): string[] {
   return found;
 }
 
-export const supportedIcon = (href: string) => SUPPORTED_EXT.test(href.split(/[?#]/)[0]);
+export const SUPPORTED_MIME = ["image/bmp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon", "image/png",
+  "image/jpeg", "image/x-portable-pixmap", "image/tiff"];
+const DATA_MIME = /^data:([^;,]*)/i;
+
+/** A data: URI by its MIME type; anything else by the extension of its URL path. */
+export function supportedIcon(href: string): boolean {
+  const m = DATA_MIME.exec(href);
+  if (m) return SUPPORTED_MIME.includes(stripChars(m[1]).toLowerCase());
+  return SUPPORTED_EXT.test(split(href)[2].split(/[?#]/)[0]);
+}
 
 export function checkFavicon(html: string, url: string): CheckResult {
   if (!isHomePage(url)) return { problems: [], home_page: false, icons: [] };

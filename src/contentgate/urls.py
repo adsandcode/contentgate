@@ -85,12 +85,8 @@ def page_parts(url):
     return scheme, host, _QUERY_OR_FRAGMENT.split(tail, 1)[0]
 
 
-def resolve_host(href, page_scheme, page_host):
-    """Host a browser opens for `href` on a page at page_scheme://page_host.
-
-    Returns "" for targets that are not http(s) (mailto:, tel:, javascript:)
-    and for URLs a browser would refuse.
-    """
+def normalise(href, page_scheme):
+    """`href` rewritten the way a browser reads it on a page_scheme page."""
     u = re.sub(r"[\t\n\r]", "", href).strip(STRIP).replace("\\", "/")
     m = _HTTP_PREFIX.match(u)
     if m:
@@ -99,13 +95,36 @@ def resolve_host(href, page_scheme, page_host):
             u = scheme + "://" + u[m.end():]
     elif u.startswith("//"):
         u = "//" + u.lstrip("/")
-    scheme, netloc, _tail = split(u)
+    return u
+
+
+def resolve(href, page_scheme, page_host):
+    """(host, path, absolute) for `href` on a page at page_scheme://page_host.
+
+    absolute is False for a link relative to the page, whose host is then
+    page_host. host is "" for targets that are not http(s) (mailto:, tel:,
+    javascript:) and for URLs a browser would refuse. path excludes the query
+    and fragment.
+    """
+    scheme, netloc, tail = split(normalise(href, page_scheme))
+    path = _QUERY_OR_FRAGMENT.split(tail, 1)[0]
     if scheme in ("", page_scheme):
         # Same scheme as the page: a link without a host is relative to it.
-        return hostname(netloc) if netloc else page_host
+        if not netloc:
+            return page_host, path, False
+        return hostname(netloc), path, True
     if scheme not in ("http", "https") or netloc is None:
-        return ""
-    return hostname(netloc)
+        return "", path, True
+    return hostname(netloc), path, True
+
+
+def resolve_host(href, page_scheme, page_host):
+    """Host a browser opens for `href` on a page at page_scheme://page_host.
+
+    Returns "" for targets that are not http(s) (mailto:, tel:, javascript:)
+    and for URLs a browser would refuse.
+    """
+    return resolve(href, page_scheme, page_host)[0]
 
 
 def under(host, domain):

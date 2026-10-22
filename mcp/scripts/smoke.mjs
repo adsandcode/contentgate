@@ -4,8 +4,10 @@
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const entry = resolve(here, "..", "dist", "index.js");
@@ -128,5 +130,22 @@ const distinct = parse(await client.callTool({
 expect("two different pages are not", distinct.verdict, "pass");
 
 await client.close();
+
+// Importing the package must not start a server. A child process that imports
+// a module with stdin held open either exits on its own (no side effects) or
+// is still running when the timer fires (something is listening).
+const importOutcome = (file) => new Promise((done) => {
+  const child = spawn(process.execPath,
+    ["--input-type=module", "-e", `const m = await import(${JSON.stringify(pathToFileURL(file).href)}); if (typeof m.checkClaims !== "function") process.exitCode = 3;`],
+    { stdio: ["pipe", "ignore", "ignore"] });
+  const timer = setTimeout(() => { child.kill(); done("still running"); }, 3000);
+  child.on("exit", (code) => { clearTimeout(timer); done(`exited ${code}`); });
+});
+const pkg = JSON.parse(readFileSync(resolve(here, "..", "package.json"), "utf8"));
+expect("importing the package main starts nothing and exports the guards",
+  await importOutcome(resolve(here, "..", pkg.main)), "exited 0");
+expect("control: importing the server entry does start a server",
+  await importOutcome(entry), "still running");
+
 console.log(failures ? `\n${failures} smoke check(s) failed` : "\nall smoke checks passed");
 process.exit(failures ? 1 : 0);

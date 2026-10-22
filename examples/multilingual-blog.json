@@ -16,7 +16,8 @@
       "pages": "site/blog/*/index.html",
       "money_paths": ["/products/", "/plans/"],
       "require_figure": true,
-      "extra_evidence": []
+      "extra_evidence": [],
+      "site_hosts": ["www.example.org"]
     },
     "translation": {
       "enabled": true,

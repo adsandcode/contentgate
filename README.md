@@ -13,7 +13,7 @@ negative tests
     [ok] expected block got block  primary keyword appears once, threshold is three
     [ok] expected block got block  spaced variant must not satisfy the unspaced keyword
     ...
-  121 passed, 0 failed
+  160 passed, 0 failed
 
 checks
   [ ok ] keywords   choosing-a-cms (1200/1200 volume covered)
@@ -47,8 +47,8 @@ three were found by asking them to fail on purpose.
 |---|---|
 | `keywords` | The page covers the topic and never contains the term people search for. |
 | `translation` | A translation that is no longer structurally the same document: dropped table row, changed price, internal link that lost its locale prefix. |
-| `internal_links` | A guide that ranks, gets read, and sends nobody anywhere, because its only commercial link lives in site-wide boilerplate. |
-| `claims` | Affirmative performance claims in regulated copy, without firing on the disclaimer that names them. |
+| `internal_links` | A guide that ranks, gets read, and sends nobody anywhere, because its only commercial link lives in site-wide boilerplate or points at another site. |
+| `claims` | Affirmative performance claims in regulated copy, without firing on the disclaimer that negates them. |
 | `lastmod` | A sitemap that stamps today's date on every URL every build and trains crawlers to ignore the field. |
 
 Three details that look fussy and are not:
@@ -68,6 +68,29 @@ is primary. The alternative, taking the first maximum, makes the verdict depend
 on the order of keys in a JSON file, which is stable right up until someone
 reorders the table.
 
+Two more that changed in 0.2.0:
+
+**A commercial link has to point at your own site.** A relative link counts. An
+absolute link counts only when its host is in `site_hosts` or a subdomain of
+one, compared on label boundaries and read the way a browser reads it;
+without `site_hosts`, absolute links never count. A link to
+`https://competitor.example/pricing/` ends in `/pricing/` and sells someone
+else's product. The money path is matched against the path, not the query
+string, so `/blog/?next=/pricing/` is not a pricing link.
+
+**A disclaimer has to negate the claim itself.** A negation anywhere in the
+sentence used to be enough, so 「保證獲利，絕不會虧損」 (guaranteed profit, never a
+loss) passed because it negates the loss. Now a claim is exempt only when a
+negator or prohibition stands shortly before it in the same clause (at most
+three words or two Han characters between, no comma): 不保證獲利, 不做保證獲利宣稱,
+"we do not guarantee profit", "no guaranteed returns", "never promise
+guaranteed income". Idioms that only look negative ("not only", "don't miss",
+"no risk", 不僅, 不斷, 沒有風險) do not count, the 不 inside 穩賺不賠 is part of the
+claim, every phrase in a governed list shares the exemption, and a phrase named
+as forbidden ("guaranteed profit claims are banned", 保證獲利等字眼一律不得使用) is
+not asserted. It is a net for copy review, not a legal opinion, and it errs
+towards flagging.
+
 ## Page-level SEO/GEO audit
 
 New in 0.2.0: checks on a built page that is meant to be found, both through
@@ -86,10 +109,14 @@ Run them on the HTML your server actually sends, not on the source.
 
 **Text a crawler sees without JavaScript.** Google renders JavaScript before
 indexing. Many AI crawlers do not: a December 2024 measurement by Vercel found
-that GPTBot, ClaudeBot and PerplexityBot fetch the HTML and stop there. An
-article written into the page by a script is, to them, a navigation bar and a
-footer. The check drops `<script>` and `<style>`, reads only `<main>` when the
-page has one, drops `<nav>` and `<footer>`, removes `<wbr>` and zero-width
+that the crawlers behind ChatGPT and Claude do fetch JavaScript files but do not
+execute them, and that none of the major AI crawlers it observed render
+JavaScript. An article written into the page by a script is, to them, a
+navigation bar and a footer. The check drops `<script>` and `<style>`, drops
+`<template>` elements and any element with the `hidden` attribute, children
+included (`aria-hidden` is left alone: it hides an element from assistive
+technology, not from the screen), reads only `<main>` when the page has one,
+drops `<nav>` and `<footer>`, removes `<wbr>` and zero-width
 spaces without leaving a gap (a word broken for line wrapping is still one
 word), decodes entities and counts what is left. The default of 1200 characters
 is a house rule, not a number any search engine publishes. Short pages such as
@@ -100,7 +127,18 @@ real JSON parser, so a trailing comma or a `NaN` is a failure rather than
 something a text search would count as present. Types are collected from each
 item, from `@graph`, and from `author`, `publisher` and `creator`, where
 Organization and Person usually sit. The default requirement is `Article`,
-`BreadcrumbList` and `Organization`; a page that declares `ProfilePage` is not
+`BreadcrumbList` and `Organization`. A required type is satisfied by its
+schema.org subtypes: `Article` by all eighteen of them (`NewsArticle` and
+`BlogPosting`, which Google's Article documentation names, plus `TechArticle`,
+`ScholarlyArticle`, `Report`, `SocialMediaPosting`, `LiveBlogPosting`, the
+`*NewsArticle` family and the rest), and `Organization` by its direct subtypes
+(`Corporation`, `NGO`, `NewsMediaOrganization`, `EducationalOrganization`,
+`OnlineBusiness`, `LocalBusiness` ...) and the common families under them
+(schools, medical organisations, restaurants and other food establishments,
+lodging, stores, financial services). The Organization list is a curated part
+of the schema.org tree, not all of it; the full table is `SUBTYPES` in
+`src/contentgate/guards/structured_data.py`, and a type it does not list has to
+be required by name. A page that declares `ProfilePage` is not
 required to be an `Article`, since Google's ProfilePage documentation lists an
 author page on a news site among its intended uses. Requiring a type does not
 make any search engine show anything; it checks that what you meant to declare
@@ -121,12 +159,15 @@ starting the host. Without that, `https://partner.example\.gov.example/` looks t
 is not under `example.org`, and a page's own subdomains count as internal. When
 a tag repeats `rel`, the first one wins, as it does in the browser.
 
-`cite_ok` is for sites you cite editorially, matched with their subdomains, for
-example `["gov.uk", "who.int"]`: a suffix only government bodies can register
-is a reasonable entry. A registry anyone can register under, such as `co.uk`,
+A reported citation is not a reason to add `nofollow` to it. Google does not ask
+for any `rel` on ordinary editorial links, and marking every citation
+`nofollow` to make the check pass would misdescribe them. List the sites you
+cite in `cite_ok` instead, matched with their subdomains, for example
+`["gov.uk", "who.int"]`: a suffix only government bodies can register is a
+reasonable entry. A registry anyone can register under, such as `co.uk`,
 `github.io` or `pages.dev`, is refused with an error, because listing it would
 exempt every site below it. Paid or affiliate partners never belong in
-`cite_ok`.
+`cite_ok`: they need `rel="sponsored"`.
 
 **Images.** Google uses alt text, together with the image and the page around
 it, to understand what an image shows; `alt=""` is a deliberate statement that
@@ -140,17 +181,21 @@ so the check runs only when the page URL's path is empty or `/`. Accepted `rel`
 values are the ones Google documents (`icon`, which `shortcut icon` contains,
 `apple-touch-icon`, `apple-touch-icon-precomposed`). Google Search "supports the
 following favicon file formats: BMP, GIF, ICO, PNG, JPEG, PPM, and TIFF", so an
-SVG or WebP icon on its own fails. The format is read from the file extension.
-Whether the file exists, its size and whether it is square need the built files
-and are not checked here.
+SVG or WebP icon on its own fails. The format is read from the file extension
+of the URL path, ignoring any query string or fragment, or, for a `data:` URI,
+from its MIME type (`data:image/png;...` passes, `data:image/svg+xml,...` does
+not). Whether the file exists, its size and whether it is square need the built
+files and are not checked here.
 
 **Stock phrases.** An editorial style check, not a detector of machine-written
 text: it finds phrases you have decided read as filler, and proves nothing about
 who or what wrote the page. The default list is Traditional Chinese, because
 that is where it was built and tested (總的來說, 值得注意的是, 綜上所述 and nine
-more). For any other language, supply your own list; the defaults will never
-match. Matching is literal and case-insensitive, on the text a crawler sees, so
-a phrase inside a script or in the navigation does not count.
+more). It is one editor's taste, and it is meant to be replaced: connectives
+such as 因此， and 然而， will flag perfectly ordinary sentences. For any other
+language, supply your own list; the defaults will never match. Matching is
+literal and case-insensitive, on the text a crawler sees, so a phrase inside a
+script or in the navigation does not count.
 
 **Duplicate sentences.** Sentences are split on 。！？ and on `.`, `!` or `?`
 followed by whitespace, so `4.99` does not end a sentence; sentences under ten
@@ -163,6 +208,7 @@ Sources, checked when this release was written:
 [qualifying outbound links](https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links) (Google Search Central, updated 2025-12-10),
 [favicons in search results](https://developers.google.com/search/docs/appearance/favicon-in-search) (Google Search Central, updated 2026-08-28),
 [ProfilePage structured data](https://developers.google.com/search/docs/appearance/structured-data/profile-page) (Google Search Central, updated 2026-09-08),
+[Article structured data](https://developers.google.com/search/docs/appearance/structured-data/article) (Google Search Central, updated 2026-09-08),
 [image SEO](https://developers.google.com/search/docs/appearance/google-images) (Google Search Central, updated 2026-03-02),
 [optimizing layout shift](https://web.dev/articles/optimize-cls) (web.dev, updated 2025-02-07),
 and, as a third-party measurement, [AI crawlers and JavaScript](https://vercel.com/blog/the-rise-of-the-ai-crawler) (Vercel, 2024-12-17).
@@ -226,7 +272,8 @@ one phrase per line and replaces the default list.
       "enabled": true,
       "pages": "site/blog/*/index.html",
       "money_paths": ["/products/", "/plans/"],
-      "require_figure": true
+      "require_figure": true,
+      "site_hosts": ["www.example.org"]
     },
     "translation": {
       "enabled": true,
@@ -330,6 +377,11 @@ Every tool is pure: content in, verdict out. No filesystem access, no network
 access, nothing written. The server runs its negative tests at startup and
 refuses to start if they fail.
 
+The same guards are importable as plain functions, without starting anything:
+`import { checkClaims, auditPage } from "mcp-server-contentgate"`. The package's
+`main` is a module with no side effects; only the `mcp-server-contentgate`
+command starts the server.
+
 ## Why there are two implementations
 
 The Python CLI runs in a deploy pipeline. The MCP server runs inside an assistant
@@ -339,7 +391,7 @@ They share `fixtures/cases.json`, and both are required to produce identical
 verdicts on every case in it. If they disagree, one has drifted and CI fails.
 
 ```bash
-python -m contentgate selftest     # 121 passed, 0 failed
+python -m contentgate selftest     # 160 passed, 0 failed
 cd mcp && npm run build && npm run selftest
 ```
 

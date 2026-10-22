@@ -82,11 +82,18 @@ def _verdict(case):
         return "block" if problems else "pass"
 
     if g == "internal_links":
+        # A site_hosts entry anyone can register under is refused before the
+        # page is read, like a too-broad cite_ok.
+        try:
+            internal_links.site_domains(i.get("site_hosts", ()))
+        except ValueError:
+            return "block"
         problems, _ = internal_links.check(
             i["html"], i["money_paths"],
             scope=tuple(i["scope"]) if i.get("scope") else None,
             exclude_classes=i.get("exclude_classes", ()),
-            require_figure=i.get("require_figure", False))
+            require_figure=i.get("require_figure", False),
+            site_hosts=i.get("site_hosts", ()))
         return "block" if problems else "pass"
 
     if g == "claims":

@@ -7,6 +7,9 @@ Types are collected from each top-level item, from items in @graph, and from
 the author, publisher and creator of those items, because that is where
 Organization and Person usually live. @type may be a string or a list.
 
+A required type is satisfied by its schema.org subtypes (see SUBTYPES): a
+BlogPosting is an Article, a NewsMediaOrganization is an Organization.
+
 A page that declares ProfilePage is not required to be an Article: Google's
 ProfilePage documentation lists author pages among its intended uses.
 """
@@ -17,6 +20,53 @@ import re
 from ..markup import WS
 
 DEFAULT_REQUIRE_TYPES = ("Article", "BreadcrumbList", "Organization")
+
+# A required type is satisfied by itself or by any type listed under it here.
+# Article: every subtype schema.org defines (Google's Article documentation
+# names NewsArticle and BlogPosting). Organization: the direct subtypes and the
+# common families below LocalBusiness, a curated subset of the schema.org tree
+# rather than all of it. Names checked against the schema.org vocabulary,
+# 2026-10-23. mcp/src/audit.ts carries the same table; tests compare the two.
+SUBTYPES = {
+    "Article": [
+        "APIReference", "AdvertiserContentArticle", "AnalysisNewsArticle", "AskPublicNewsArticle",
+        "BackgroundNewsArticle", "BlogPosting", "DiscussionForumPosting", "LiveBlogPosting",
+        "MedicalScholarlyArticle", "NewsArticle", "OpinionNewsArticle", "Report",
+        "ReportageNewsArticle", "ReviewNewsArticle", "SatiricalArticle", "ScholarlyArticle",
+        "SocialMediaPosting", "TechArticle"
+    ],
+    "Organization": [
+        "AccountingService", "Airline", "AnimalShelter", "ArchiveOrganization", "AutoPartsStore",
+        "AutomotiveBusiness", "Bakery", "BankOrCreditUnion", "BarOrPub", "BedAndBreakfast",
+        "BikeStore", "BookStore", "Brewery", "CafeOrCoffeeShop", "Campground", "ChildCare",
+        "ClothingStore", "CollegeOrUniversity", "ComputerStore", "Consortium", "ConvenienceStore",
+        "Cooperative", "Corporation", "DanceGroup", "Dentist", "DepartmentStore", "DiagnosticLab",
+        "Distillery", "DryCleaningOrLaundry", "EducationalOrganization", "ElectronicsStore",
+        "ElementarySchool", "EmergencyService", "EmploymentAgency", "EntertainmentBusiness",
+        "FastFoodRestaurant", "FinancialService", "Florist", "FoodEstablishment", "FundingScheme",
+        "FurnitureStore", "GardenStore", "GovernmentOffice", "GovernmentOrganization",
+        "GroceryStore", "HardwareStore", "HealthAndBeautyBusiness", "HighSchool", "HobbyShop",
+        "HomeAndConstructionBusiness", "HomeGoodsStore", "Hospital", "Hostel", "Hotel",
+        "IceCreamShop", "InsuranceAgency", "InternetCafe", "JewelryStore", "LegalService",
+        "Library", "LibrarySystem", "LiquorStore", "LocalBusiness", "LodgingBusiness",
+        "MedicalBusiness", "MedicalClinic", "MedicalOrganization", "MensClothingStore",
+        "MiddleSchool", "MobilePhoneStore", "Motel", "MovieRentalStore", "MusicGroup",
+        "MusicStore", "NGO", "NewsMediaOrganization", "OfficeEquipmentStore", "OnlineBusiness",
+        "OnlineStore", "OutletStore", "PawnShop", "PerformingGroup", "PetStore", "Pharmacy",
+        "Physician", "PoliticalParty", "Preschool", "ProfessionalService", "Project",
+        "RadioStation", "RealEstateAgent", "RecyclingCenter", "ResearchOrganization", "Resort",
+        "Restaurant", "School", "SearchRescueOrganization", "SelfStorage", "ShoeStore",
+        "ShoppingCenter", "SportingGoodsStore", "SportsActivityLocation", "SportsOrganization",
+        "SportsTeam", "Store", "TelevisionStation", "TheaterGroup", "TireShop",
+        "TouristInformationCenter", "ToyStore", "TravelAgency", "VacationRental",
+        "VeterinaryCare", "WholesaleStore", "Winery", "WorkersUnion"
+    ],
+}
+
+
+def satisfied(required, present):
+    """`required` is present itself or through one of its listed subtypes."""
+    return required in present or any(t in present for t in SUBTYPES.get(required, ()))
 
 _BLOCK = re.compile(r"<script[^>]+application/ld\+json[^>]*>(.*?)</script>", re.I | re.S | re.A)
 _NESTED = ("author", "publisher", "creator")
@@ -91,7 +141,7 @@ def check(html, require_types=DEFAULT_REQUIRE_TYPES, require_date_modified=True)
     wanted = list(require_types)
     if "ProfilePage" in present:
         wanted = [t for t in wanted if t != "Article"]
-    missing = [t for t in wanted if t not in present]
+    missing = [t for t in wanted if not satisfied(t, present)]
 
     problems = []
     if broken:

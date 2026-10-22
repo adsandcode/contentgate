@@ -70,6 +70,11 @@ export function pageParts(url: string): [string, string, string] {
  * URLs a browser would refuse.
  */
 export function resolveHost(href: string, pageScheme: string, pageHost: string): string {
+  return resolve(href, pageScheme, pageHost)[0];
+}
+
+/** `href` rewritten the way a browser reads it on a pageScheme page. */
+export function normalise(href: string, pageScheme: string): string {
   let u = stripChars(href.replace(/[\t\n\r]/g, ""), STRIP).split("\\").join("/");
   const m = HTTP_PREFIX.exec(u);
   if (m) {
@@ -78,10 +83,24 @@ export function resolveHost(href: string, pageScheme: string, pageHost: string):
   } else if (u.startsWith("//")) {
     u = "//" + u.replace(/^\/+/, "");
   }
-  const [scheme, netloc] = split(u);
-  if (scheme === "" || scheme === pageScheme) return netloc ? hostname(netloc) : pageHost;
-  if ((scheme !== "http" && scheme !== "https") || netloc === null) return "";
-  return hostname(netloc);
+  return u;
+}
+
+/**
+ * [host, path, absolute] for `href` on a page at pageScheme://pageHost.
+ * absolute is false for a link relative to the page, whose host is pageHost;
+ * host is "" for non-http(s) targets and refused URLs; path excludes query
+ * and fragment.
+ */
+export function resolve(href: string, pageScheme: string, pageHost: string): [string, string, boolean] {
+  const [scheme, netloc, tail] = split(normalise(href, pageScheme));
+  const path = tail.split(/[?#]/)[0];
+  if (scheme === "" || scheme === pageScheme) {
+    if (!netloc) return [pageHost, path, false];
+    return [hostname(netloc), path, true];
+  }
+  if ((scheme !== "http" && scheme !== "https") || netloc === null) return ["", path, true];
+  return [hostname(netloc), path, true];
 }
 
 /** host is domain itself or a subdomain of it, on a label boundary. */

@@ -55,13 +55,20 @@ if (!existsSync(serverPath)) {
 }
 
 // The version the server reports to clients over MCP.
-const indexSrc = resolve(here, "..", "src", "index.ts");
-if (existsSync(indexSrc)) {
-  const m = /export const VERSION = "([^"]+)"/.exec(readFileSync(indexSrc, "utf8"));
-  if (!m) problems.push("src/index.ts does not declare VERSION");
+const versionSrc = resolve(here, "..", "src", "version.ts");
+if (existsSync(versionSrc)) {
+  const m = /export const VERSION = "([^"]+)"/.exec(readFileSync(versionSrc, "utf8"));
+  if (!m) problems.push("src/version.ts does not declare VERSION");
   else if (m[1] !== pkg.version)
-    problems.push(`src/index.ts VERSION ${m[1]} differs from package.json version ${pkg.version}`);
+    problems.push(`src/version.ts VERSION ${m[1]} differs from package.json version ${pkg.version}`);
 }
+
+// "main" is what `import "mcp-server-contentgate"` loads. Pointing it at the
+// server entry would start a server inside whatever imported the package.
+const bins = Object.values(typeof pkg.bin === "string" ? { x: pkg.bin } : pkg.bin ?? {});
+if (!pkg.main) problems.push('package.json is missing "main"');
+else if (bins.some((b) => resolve(here, "..", b) === resolve(here, "..", pkg.main)))
+  problems.push(`package.json "main" (${pkg.main}) is the server entry; point it at a module without side effects`);
 
 if (problems.length) {
   console.error("not ready to publish:");

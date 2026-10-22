@@ -26,7 +26,8 @@ TEMPLATE = {
             "pages": "site/blog/*/index.html",
             "money_paths": ["/services/", "/pricing/"],
             "require_figure": True,
-            "extra_evidence": []
+            "extra_evidence": [],
+            "site_hosts": ["www.example.org"]
         },
         "translation": {
             "enabled": True,

@@ -9,7 +9,7 @@ import { dirname, resolve } from "node:path";
 
 import {
   checkKeywords, checkTranslation, checkInternalLinks, checkClaims,
-  contentHash, resolveLastmod, DEFAULT_PRIMARY_MIN_HITS,
+  contentHash, resolveLastmod, siteDomains, DEFAULT_PRIMARY_MIN_HITS,
 } from "./guards.js";
 import {
   checkVisibleText, checkStructuredData, validateCiteOk, scanOutbound, checkImages,
@@ -78,9 +78,11 @@ export function verdict(c: Case): Verdict {
       return problems.length ? "block" : "pass";
     }
     case "internal_links": {
+      // A refused site_hosts entry blocks before the page is read; see the Python side.
+      try { siteDomains(i.site_hosts ?? []); } catch { return "block"; }
       const { problems } = checkInternalLinks(
         i.html, i.money_paths, i.scope ?? null, i.exclude_classes ?? [],
-        i.require_figure ?? false);
+        i.require_figure ?? false, [], i.site_hosts ?? []);
       return problems.length ? "block" : "pass";
     }
     case "claims":
