@@ -18,6 +18,8 @@ import pathlib
 from . import config as config_mod
 from . import selftest as selftest_mod
 from .guards import keywords, translation, internal_links, claims, lastmod
+from .guards import page_audit, duplicate_sentences, crawler_text, structured_data, stock_phrases
+from .guards.crawler_text import crawler_text as _crawler_text
 
 OK, FAIL, MARK = "[ ok ]", "[FAIL]", "[warn]"
 
@@ -168,13 +170,152 @@ def run_lastmod(cfg, report, write=True):
     return 0
 
 
+def _site_pages(cfg, g):
+    """[(path, url_path)] for the built site, skipping 404 pages at every level.
+
+    index.html maps to "", a/index.html to "a/", a/b.html to "a/b.html", so the
+    URL each page is judged under is the one it is served at.
+    """
+    site_dir = cfg.resolve(g.get("site_dir", "."))
+    skip = set(g.get("skip", ["404.html"]))
+    out = []
+    for p in _glob(site_dir, g.get("pages", "**/*.html")):
+        if not p.is_file() or p.name in skip:
+            continue
+        rel = p.relative_to(site_dir).as_posix()
+        if rel == "index.html":
+            rel = ""
+        elif rel.endswith("/index.html"):
+            rel = rel[:-len("index.html")]
+        out.append((p, rel))
+    return out
+
+
+def _audit_options(g):
+    phrases = g.get("stock_phrases")
+    return dict(
+        checks=g.get("checks", page_audit.CHECKS),
+        min_chars=g.get("min_chars", crawler_text.DEFAULT_MIN_CHARS),
+        require_types=g.get("require_types", structured_data.DEFAULT_REQUIRE_TYPES),
+        require_date_modified=g.get("require_date_modified", True),
+        cite_ok=g.get("cite_ok", []),
+        phrases=stock_phrases.DEFAULT_PHRASES if phrases is None else phrases,
+    )
+
+
+def _report_audit(report, label, results):
+    bad = page_audit.failed(results)
+    if not bad:
+        report.append((OK, "audit", "{} ({} check(s))".format(label, len(results))))
+        return 0
+    report.append((FAIL, "audit", "{} ({})".format(label, ", ".join(bad))))
+    for name in bad:
+        for p in results[name]["problems"]:
+            report.append(("", "", "    [{}] {}".format(name, p)))
+    return 1
+
+
+def run_page_audit(cfg, report):
+    g = cfg.guard("page_audit")
+    site_url = g["site_url"].rstrip("/") + "/"
+    pages = _site_pages(cfg, g)
+    if not pages:
+        # Nothing matched means the paths are wrong, not that the site is fine.
+        report.append((FAIL, "audit", "no pages matched {!r} under {}".format(
+            g.get("pages", "**/*.html"), g.get("site_dir", "."))))
+        return 1
+    opts = _audit_options(g)
+    failures = 0
+    for page, rel in pages:
+        results = page_audit.audit(_read(page), site_url + rel, **opts)
+        failures += _report_audit(report, "/" + rel, results)
+    return failures
+
+
+def run_duplicate_sentences(cfg, report):
+    g = cfg.guard("duplicate_sentences")
+    limit = g.get("max_share", duplicate_sentences.DEFAULT_MAX_SHARE)
+    pages = _site_pages(cfg, g)
+    if len(pages) < 2:
+        report.append((FAIL, "dupes", "fewer than two pages matched {!r} under {}".format(
+            g.get("pages", "**/*.html"), g.get("site_dir", "."))))
+        return 1
+    sents = [duplicate_sentences.sentences(_crawler_text(_read(p))) for p, _ in pages]
+    over = sorted(((max(a, b), i, j, a, b) for i, j, a, b in duplicate_sentences.overlaps(sents)
+                   if max(a, b) > limit), reverse=True)
+    for _, i, j, a, b in over[:30]:
+        report.append((FAIL, "dupes", "/{} vs /{}: {}% / {}% of sentences shared".format(
+            pages[i][1], pages[j][1], int(a * 100 + 0.5), int(b * 100 + 0.5))))
+    if len(over) > 30:
+        report.append(("", "", "    ... and {} more pair(s)".format(len(over) - 30)))
+    if not over:
+        report.append((OK, "dupes", "{} page(s), no pair above {}% shared".format(
+            len(pages), int(limit * 100 + 0.5))))
+    return len(over)
+
+
 RUNNERS = [
     ("keywords", run_keywords),
     ("internal_links", run_internal_links),
     ("translation", run_translation),
     ("claims", run_claims),
     ("lastmod", run_lastmod),
+    ("page_audit", run_page_audit),
+    ("duplicate_sentences", run_duplicate_sentences),
 ]
+
+
+def _split_list(values):
+    """Repeatable option that also accepts comma-separated values."""
+    return [v.strip() for item in (values or []) for v in item.split(",") if v.strip()]
+
+
+def cmd_audit(args):
+    try:
+        html = _read(args.file)
+    except (FileNotFoundError, UnicodeDecodeError) as exc:
+        print("{} cannot read {}: {}".format(FAIL, args.file, exc))
+        return 1
+    phrases = stock_phrases.DEFAULT_PHRASES
+    if args.phrases:
+        phrases = [l.strip() for l in _read(args.phrases).splitlines() if l.strip()]
+    try:
+        results = page_audit.audit(
+            html, args.url,
+            checks=args.only or page_audit.CHECKS,
+            min_chars=args.min_chars,
+            require_types=_split_list(args.require_type) or structured_data.DEFAULT_REQUIRE_TYPES,
+            require_date_modified=not args.no_date_modified,
+            cite_ok=_split_list(args.cite_ok),
+            phrases=phrases)
+    except ValueError as exc:
+        print("{} configuration problem: {}".format(FAIL, exc))
+        return 1
+    print("\naudit {}".format(args.url))
+    for name, r in results.items():
+        print("  {:<6} {}".format(OK if r["verdict"] == "pass" else FAIL, name))
+        for p in r["problems"]:
+            print("      " + p)
+    bad = page_audit.failed(results)
+    if bad:
+        print("\n{} {} check(s) failed. Deploy blocked.".format(FAIL, len(bad)))
+        return 1
+    print("\n{} all checks passed.".format(OK))
+    return 0
+
+
+def cmd_compare(args):
+    problems, d = duplicate_sentences.check(_read(args.a), _read(args.b), args.max_share)
+    print("\ncompare")
+    print("  {}% of {}'s sentences appear verbatim in {}".format(int(d["a_in_b"] * 100 + 0.5), args.a, args.b))
+    print("  {}% of {}'s sentences appear verbatim in {}".format(int(d["b_in_a"] * 100 + 0.5), args.b, args.a))
+    for s in d["shared"]:
+        print("    shared: " + s)
+    if problems:
+        print("\n{} {}".format(FAIL, problems[0]))
+        return 1
+    print("\n{} below the {}% limit.".format(OK, int(args.max_share * 100 + 0.5)))
+    return 0
 
 
 def main(argv=None):
@@ -190,6 +331,28 @@ def main(argv=None):
     sub.add_parser("selftest", help="run the guards' own negative tests and stop")
     i = sub.add_parser("init", help="write a starting contentgate.json")
     i.add_argument("--config", default="contentgate.json")
+    a = sub.add_parser("audit", help="page-level SEO/GEO checks on one built HTML file")
+    a.add_argument("file", help="the built HTML file")
+    a.add_argument("--url", required=True,
+                   help="the URL the page is served at; decides which links are external "
+                        "and whether this is the home page")
+    a.add_argument("--only", action="append", choices=page_audit.CHECKS,
+                   help="run only this check; repeatable")
+    a.add_argument("--min-chars", type=int, default=crawler_text.DEFAULT_MIN_CHARS,
+                   help="visible_text: minimum characters readable with JavaScript off")
+    a.add_argument("--require-type", action="append",
+                   help="structured_data: required @type; repeatable or comma-separated")
+    a.add_argument("--no-date-modified", action="store_true",
+                   help="structured_data: do not require dateModified")
+    a.add_argument("--cite-ok", action="append",
+                   help="outbound_links: domain cited editorially, exempt from rel; "
+                        "repeatable or comma-separated")
+    a.add_argument("--phrases", help="stock_phrases: UTF-8 file, one phrase per line, "
+                                     "replacing the default list")
+    cm = sub.add_parser("compare", help="verbatim sentence overlap between two built HTML files")
+    cm.add_argument("a")
+    cm.add_argument("b")
+    cm.add_argument("--max-share", type=float, default=duplicate_sentences.DEFAULT_MAX_SHARE)
     args = ap.parse_args(argv)
 
     if args.command == "init":
@@ -205,6 +368,10 @@ def main(argv=None):
         return 2
     if args.command == "selftest":
         return 0
+    if args.command == "audit":
+        return cmd_audit(args)
+    if args.command == "compare":
+        return cmd_compare(args)
 
     cfg = config_mod.load(args.config)
     report, failures = [], 0

@@ -9,6 +9,8 @@
  * implementations disagree on edge cases that no test covers.
  */
 
+import { HTML5_ENTITIES, INVALID_CHARREFS, INVALID_CODEPOINTS } from "./entities.js";
+
 const VOID = new Set([
   "area", "base", "br", "col", "embed", "hr", "img", "input",
   "link", "meta", "param", "source", "track", "wbr",
@@ -23,19 +25,51 @@ export interface Token {
   selfClosing?: boolean;
 }
 
-const ENTITIES: Record<string, string> = {
-  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
-};
+/**
+ * Exactly the characters for which Python's str.isspace() is true. JavaScript's
+ * \s is a different set (it adds U+FEFF and lacks U+001C-U+001F and U+0085), so
+ * both implementations spell the set out and collapse, strip and split on it.
+ */
+export const WS = "\t\n\x0b\x0c\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
+  + "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+  + "\u2028\u2029\u202f\u205f\u3000";
+/** The same set as a regular-expression character class body. */
+export const WS_CLASS = "\\t\\n\\x0b\\x0c\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a"
+  + "\\u2028\\u2029\\u202f\\u205f\\u3000";
 
-function unescape(s: string): string {
-  return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, body) => {
+/** Python's str.strip(chars): remove any of `chars` from both ends. */
+export function stripChars(s: string, chars: string = WS): string {
+  let a = 0, b = s.length;
+  while (a < b && chars.includes(s[a])) a++;
+  while (b > a && chars.includes(s[b - 1])) b--;
+  return s.slice(a, b);
+}
+
+const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+const CHARREF = /&(#[0-9]+;?|#[xX][0-9a-fA-F]+;?|[^\t\n\f <&#;]{1,32};?)/gu;
+
+/**
+ * A port of Python's html.unescape, table and all. The Python implementation
+ * decodes references with it, and a character count must not depend on which
+ * implementation did the counting.
+ */
+export function unescape(s: string): string {
+  if (!s.includes("&")) return s;
+  return s.replace(CHARREF, (_m, body: string) => {
     if (body[0] === "#") {
-      const code = body[1] === "x" || body[1] === "X"
-        ? parseInt(body.slice(2), 16)
-        : parseInt(body.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+      const hex = body[1] === "x" || body[1] === "X";
+      const num = parseInt(body.slice(hex ? 2 : 1).replace(/;$/, ""), hex ? 16 : 10);
+      if (has(INVALID_CHARREFS, String(num))) return INVALID_CHARREFS[String(num)];
+      if ((num >= 0xd800 && num <= 0xdfff) || num > 0x10ffff) return "\ufffd";
+      if (INVALID_CODEPOINTS.has(num)) return "";
+      return String.fromCodePoint(num);
     }
-    return ENTITIES[body.toLowerCase()] ?? m;
+    if (has(HTML5_ENTITIES, body)) return HTML5_ENTITIES[body];
+    // The longest prefix that is a known name, as the HTML standard defines it.
+    for (let x = body.length - 1; x > 1; x--) {
+      if (has(HTML5_ENTITIES, body.slice(0, x))) return HTML5_ENTITIES[body.slice(0, x)] + body.slice(x);
+    }
+    return "&" + body;
   });
 }
 
@@ -192,4 +226,142 @@ export function stripped(html: string, stripClasses: Iterable<string> = [],
     }
   }
   return out.join("").replace(/\s+/g, " ").trim();
+}
+
+/* ------------------------------------------------------------------------ *
+ * Tags with their attributes, for the page-level checks.
+ *
+ * The Python implementation reads links, images and icon declarations with
+ * the standard library's html.parser. This is a port of that parser's
+ * tokenisation, as of the 2025 rewrite that brought it in line with the HTML
+ * standard: the same regular expressions, the same raw-text elements (whose
+ * contents are never tags), the same handling of comments, declarations and a
+ * bare "<" in text. On well-formed markup every supported Python version and
+ * this port agree; on badly malformed markup older Pythons differ from newer
+ * ones, and this follows the newer.
+ * ------------------------------------------------------------------------ */
+
+export interface TagToken {
+  kind: "start" | "end";
+  tag: string;
+  /** In source order, duplicates kept; a valueless attribute has value "". */
+  attrs: Array<[string, string]>;
+  selfClosing: boolean;
+}
+
+const TAGFIND = /([a-zA-Z][^\t\n\r\f />]*)(?:[\t\n\r\f ]|\/(?!>))*/y;
+const ATTRFIND = /((?<=['"\t\n\r\f /])[^\t\n\r\f />][^\t\n\r\f /=>]*)([\t\n\r\f ]*=[\t\n\r\f ]*('[^']*'|"[^"]*"|(?!['"])[^>\t\n\r\f ]*))?(?:[\t\n\r\f ]|\/(?!>))*/y;
+const LOCATE_TAG_END = /[a-zA-Z][^\t\n\r\f />]*[\t\n\r\f /]*(?:(?<=['"\t\n\r\f /])[^\t\n\r\f />][^\t\n\r\f /=>]*(?:[\t\n\r\f ]*=[\t\n\r\f ]*(?:'[^']*'|"[^"]*"|(?!['"])[^>\t\n\r\f ]*))?[\t\n\r\f /]*)*>?/y;
+const COMMENT_CLOSE = /--!?>/g;
+const COMMENT_ABRUPT_CLOSE = /-?>/y;
+const LETTER = /[a-zA-Z]/;
+/** Elements whose content is text, never markup (raw text and RCDATA). */
+const RAW_TEXT = new Set(["script", "style", "xmp", "iframe", "noembed", "noframes", "textarea", "title"]);
+
+/**
+ * `<![if !IE]>` and `<![ CDATA[` crash older versions of Python's parser, so
+ * the Python side turns the opener into text first. Done here too, so both
+ * read the same document.
+ */
+export function neutraliseMarkedSections(html: string): string {
+  return html.split("<![").join("&lt;![");
+}
+
+/** Where the tag starting at `from` (just after "<" or "</") ends, or -1 if it never does. */
+function tagEnd(s: string, from: number): number {
+  LOCATE_TAG_END.lastIndex = from;
+  LOCATE_TAG_END.exec(s);
+  const end = LOCATE_TAG_END.lastIndex;
+  return s[end - 1] === ">" ? end : -1;
+}
+
+export function scanTags(html: string): TagToken[] {
+  const s = neutraliseMarkedSections(html);
+  const n = s.length;
+  const out: TagToken[] = [];
+  let rawText: string | null = null;
+  let i = 0;
+
+  while (i < n) {
+    if (rawText !== null) {
+      const close: RegExp = new RegExp("</" + rawText + "(?=[\\t\\n\\r\\f />])", "gi");
+      close.lastIndex = i;
+      const m = close.exec(s);
+      if (!m) break; // the rest of the document is text
+      i = m.index;
+    } else {
+      const j = s.indexOf("<", i);
+      if (j < 0) break;
+      i = j;
+    }
+
+    if (LETTER.test(s[i + 1] ?? "")) {
+      // Start tag. One that never closes swallows the rest of the document.
+      const endpos = tagEnd(s, i + 1);
+      if (endpos < 0) break;
+      TAGFIND.lastIndex = i + 1;
+      const tag: string = TAGFIND.exec(s)![1].toLowerCase();
+      let k = TAGFIND.lastIndex;
+      const attrs: Array<[string, string]> = [];
+      while (k < endpos) {
+        ATTRFIND.lastIndex = k;
+        const m = ATTRFIND.exec(s);
+        if (!m) break;
+        let value = "";
+        if (m[2]) {
+          value = m[3] ?? "";
+          if ((value[0] === "'" && value[value.length - 1] === "'")
+              || (value[0] === '"' && value[value.length - 1] === '"')) value = value.slice(1, -1);
+          if (value) value = unescape(value);
+        }
+        attrs.push([m[1].toLowerCase(), value]);
+        k = ATTRFIND.lastIndex;
+      }
+      const end = stripChars(s.slice(k, endpos));
+      i = endpos;
+      if (end !== ">" && end !== "/>") continue; // read as text, not a tag
+      const selfClosing = end === "/>";
+      out.push({ kind: "start", tag, attrs, selfClosing });
+      if (!selfClosing) {
+        if (tag === "plaintext") break;
+        if (RAW_TEXT.has(tag)) rawText = tag;
+      }
+    } else if (s.startsWith("</", i)) {
+      if (s.indexOf(">", i + 2) < 0) break;
+      if (!LETTER.test(s[i + 2] ?? "")) {
+        // "</>" is ignored; anything else is a bogus comment up to the next ">".
+        i = s[i + 2] === ">" ? i + 3 : s.indexOf(">", i + 2) + 1;
+        continue;
+      }
+      const endpos = tagEnd(s, i + 2);
+      if (endpos < 0) break;
+      TAGFIND.lastIndex = i + 2;
+      out.push({ kind: "end", tag: TAGFIND.exec(s)![1].toLowerCase(), attrs: [], selfClosing: false });
+      rawText = null;
+      i = endpos;
+    } else if (s.startsWith("<!--", i)) {
+      COMMENT_CLOSE.lastIndex = i + 4;
+      const m = COMMENT_CLOSE.exec(s);
+      if (m) { i = m.index + m[0].length; continue; }
+      COMMENT_ABRUPT_CLOSE.lastIndex = i + 4;
+      if (!COMMENT_ABRUPT_CLOSE.exec(s)) break; // an unclosed comment runs to the end
+      i = COMMENT_ABRUPT_CLOSE.lastIndex;
+    } else if (s.startsWith("<?", i) || s.startsWith("<!", i)) {
+      // Processing instruction, doctype or bogus comment: up to the next ">".
+      const from = s.slice(i, i + 9).toLowerCase() === "<!doctype" ? i + 9 : i + 2;
+      const gt = s.indexOf(">", from);
+      if (gt < 0) break;
+      i = gt + 1;
+    } else {
+      i += 1; // a "<" that starts nothing is text
+    }
+  }
+  return out;
+}
+
+/** Attribute map where a repeated attribute keeps its first value, as browsers do. */
+export function firstWins(attrs: Array<[string, string]>): Record<string, string> {
+  const out: Record<string, string> = Object.create(null);
+  for (const [k, v] of attrs) if (!(k in out)) out[k] = v;
+  return out;
 }

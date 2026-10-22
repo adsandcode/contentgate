@@ -1,7 +1,7 @@
 """Performance-claim scanner for regulated verticals.
 
-Finance, gambling and health copy gets rejected, or worse, for stating outcomes
-as facts. The hard part is not finding the phrase, it is not firing on the
+Finance, health and other regulated copy gets rejected, or worse, for stating
+outcomes as facts. The hard part is not finding the phrase, it is not firing on the
 sentence that exists precisely to disclaim it. "We do not make guaranteed profit
 claims" contains the phrase and is the opposite of a violation.
 

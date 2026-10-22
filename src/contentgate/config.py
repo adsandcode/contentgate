@@ -46,6 +46,27 @@ TEMPLATE = {
             "strip_classes": [],
             "strip_patterns": [],
             "bulk_change_threshold": 0.3
+        },
+        "page_audit": {
+            "enabled": False,
+            "site_dir": "site",
+            "site_url": "https://www.example.org",
+            "pages": "**/*.html",
+            "skip": ["404.html"],
+            "checks": ["visible_text", "structured_data", "outbound_links",
+                       "images", "favicon", "stock_phrases"],
+            "min_chars": 1200,
+            "require_types": ["Article", "BreadcrumbList", "Organization"],
+            "require_date_modified": True,
+            "cite_ok": [],
+            "stock_phrases": None
+        },
+        "duplicate_sentences": {
+            "enabled": False,
+            "site_dir": "site",
+            "pages": "**/*.html",
+            "skip": ["404.html"],
+            "max_share": 0.15
         }
     }
 }

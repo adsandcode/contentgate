@@ -1,7 +1,8 @@
 {
   "name": "mcp-server-contentgate",
-  "version": "0.1.0",
-  "description": "MCP server for pre-deploy content checks: target keyword coverage, translation drift across locales, internal links to commercial pages, regulated performance claims, and honest sitemap lastmod.",
+  "version": "0.2.0",
+  "mcpName": "io.github.adsandcode/contentgate",
+  "description": "MCP server for pre-deploy content checks: target keyword coverage, translation drift across locales, internal links to commercial pages, regulated performance claims, honest sitemap lastmod, and a page-level SEO/GEO audit (crawler-visible text, JSON-LD, outbound link rel, images, favicon, duplicate sentences).",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -17,7 +18,12 @@
     "lastmod",
     "static-site",
     "ci",
-    "guardrails"
+    "guardrails",
+    "geo",
+    "structured-data",
+    "json-ld",
+    "nofollow",
+    "favicon"
   ],
   "license": "MIT",
   "homepage": "https://adsandcode.com/en/open-source/contentgate/",

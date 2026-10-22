@@ -20,8 +20,14 @@ import {
   checkKeywords, checkTranslation, checkInternalLinks, checkClaims,
   contentHash, resolveLastmod, DEFAULT_PRIMARY_MIN_HITS,
 } from "./guards.js";
+import {
+  auditPage, checkDuplicateSentences, CHECKS,
+  DEFAULT_MIN_CHARS, DEFAULT_REQUIRE_TYPES, DEFAULT_PHRASES, DEFAULT_MAX_SHARE,
+} from "./audit.js";
 import { run as runSelftest } from "./selftest.js";
 import type { Scope } from "./html.js";
+
+export const VERSION = "0.2.0";
 
 const scopeSchema = z.tuple([z.string(), z.string()]).optional()
   .describe('Element to look inside, as [tag, class], e.g. ["article","post"]. Omit to read the whole document.');
@@ -33,7 +39,7 @@ const text = (payload: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
 });
 
-const server = new McpServer({ name: "contentgate", version: "0.1.0" });
+const server = new McpServer({ name: "contentgate", version: VERSION });
 
 server.tool(
   "check_keywords",
@@ -99,7 +105,7 @@ server.tool(
 
 server.tool(
   "check_claims",
-  "Scan copy for affirmative performance claims of the kind that get finance, gambling and health advertising rejected: guaranteed profit, stated win rates, promised returns. Sentences that exist to disclaim or prohibit those phrases are not flagged.",
+  "Scan copy for affirmative performance claims of the kind that get finance, health and other regulated advertising rejected: guaranteed profit, stated win rates, promised returns. Sentences that exist to disclaim or prohibit those phrases are not flagged.",
   { text: z.string().describe("Plain text or HTML. HTML tags are ignored.") },
   async ({ text: input }) => {
     const hits = checkClaims(input);
@@ -134,6 +140,69 @@ server.tool(
     strip_patterns: z.array(z.string()).default([]),
   },
   async ({ body, strip_classes, strip_patterns }) => text({ hash: contentHash(body, strip_classes, strip_patterns) }),
+);
+
+const fail = (message: string) => ({
+  isError: true,
+  content: [{ type: "text" as const, text: `configuration problem: ${message}` }],
+});
+
+server.tool(
+  "audit_page",
+  "Page-level SEO/GEO audit of one rendered HTML page, before it ships. Checks: " +
+  "visible_text (characters readable with JavaScript off; Google renders JavaScript, but many AI crawlers read only the HTML the server sent, so an article injected by a script is invisible to them); " +
+  "structured_data (every JSON-LD block parses, required @type values are present, dateModified exists; a ProfilePage is not required to be an Article); " +
+  "outbound_links (external links without rel nofollow, sponsored or ugc, with hosts resolved the way a browser resolves them, so backslash and extra-slash tricks are caught; list editorially cited sites in cite_ok); " +
+  "images (<img> without alt or width); " +
+  "favicon (home page only: an icon <link> in <head>, in a format Google Search lists); " +
+  "stock_phrases (an editorial style list of filler phrases; not a detector of machine-written text). " +
+  "Returns a verdict per check. Pure: nothing is fetched or written.",
+  {
+    html: z.string().describe("Rendered HTML of the page, as the server sends it."),
+    url: z.string().describe("The page's public URL. Decides which links are external and whether this is the home page."),
+    checks: z.array(z.enum(CHECKS)).optional().describe("Run only these checks. Default: all six."),
+    min_chars: z.number().int().min(0).default(DEFAULT_MIN_CHARS)
+      .describe("visible_text: minimum characters readable with JavaScript off. 1200 is a house rule, not a search-engine number."),
+    require_types: z.array(z.string()).default(DEFAULT_REQUIRE_TYPES)
+      .describe("structured_data: @type values that must be present."),
+    require_date_modified: z.boolean().default(true).describe("structured_data: require a dateModified."),
+    cite_ok: z.array(z.string()).default([])
+      .describe('outbound_links: domains you cite editorially, exempt from rel, matched with their subdomains, e.g. ["gov.uk"]. Registries anyone can register under (co.uk, github.io, pages.dev...) are refused. Never list paid or affiliate partners here.'),
+    stock_phrases: z.array(z.string()).optional()
+      .describe("stock_phrases: phrases to flag, matched case-insensitively. Default: a Traditional Chinese list; supply your own for other languages."),
+  },
+  async ({ html, url, checks, min_chars, require_types, require_date_modified, cite_ok, stock_phrases }) => {
+    try {
+      const results = auditPage(html, url, {
+        checks, minChars: min_chars, requireTypes: require_types,
+        requireDateModified: require_date_modified, citeOk: cite_ok,
+        phrases: stock_phrases ?? DEFAULT_PHRASES,
+      });
+      const failed = Object.entries(results).filter(([, r]) => r.verdict === "block").map(([n]) => n);
+      return text({ verdict: failed.length ? "block" : "pass", failed, checks: results });
+    } catch (err) {
+      return fail((err as Error).message);
+    }
+  },
+);
+
+server.tool(
+  "compare_pages",
+  "Measure how many sentences two pages share word for word, using the text a crawler sees with JavaScript off (navigation and footers excluded). Sentences split on 。！？ and on . ! ? followed by whitespace; sentences under ten characters are ignored. The share is measured in characters, in both directions, and the larger figure decides, because a short page copied into a long one is a small share of the long page and all of the short one.",
+  {
+    html_a: z.string().describe("Rendered HTML of the first page."),
+    html_b: z.string().describe("Rendered HTML of the second page."),
+    max_share: z.number().min(0).max(1).default(DEFAULT_MAX_SHARE)
+      .describe("Largest acceptable shared share, 0 to 1."),
+  },
+  async ({ html_a, html_b, max_share }) => {
+    const r = checkDuplicateSentences(html_a, html_b, max_share);
+    return text({
+      verdict: r.problems.length ? "block" : "pass",
+      share_a_in_b: r.a_in_b, share_b_in_a: r.b_in_a, max_share,
+      problems: r.problems, shared_sentences: r.shared,
+    });
+  },
 );
 
 async function main() {

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.adsandcode/contentgate",
+  "description": "Pre-deploy checks for content sites: keywords, translations, links, claims, page SEO/GEO audit.",
+  "repository": {
+    "url": "https://github.com/adsandcode/contentgate",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "websiteUrl": "https://adsandcode.com/en/open-source/contentgate/",
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "mcp-server-contentgate",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

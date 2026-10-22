@@ -80,6 +80,53 @@ const stable = await client.callTool({
 });
 expect("unchanged page keeps its lastmod", parse(stable).lastmod, "2026-01-01");
 
+const article = (body, extra = "") =>
+  '<html><head><link rel="icon" href="/favicon.ico">' +
+  '<script type="application/ld+json">[{"@type":"Article","dateModified":"2026-09-01",' +
+  '"publisher":{"@type":"Organization","name":"P"}},{"@type":"BreadcrumbList"}]</script></head>' +
+  `<body><main><p>${body}</p>${extra}</main></body></html>`;
+const longBody = "Static hosting serves prebuilt files from the edge. ".repeat(30);
+
+const clean = parse(await client.callTool({
+  name: "audit_page",
+  arguments: { html: article(longBody), url: "https://www.mysite.example/" },
+}));
+expect("a complete page passes every audit check", clean.verdict, "pass");
+expect("all six audit checks ran", Object.keys(clean.checks).length, 6);
+
+const dirty = parse(await client.callTool({
+  name: "audit_page",
+  arguments: {
+    html: article(longBody, '<a href="https://partner-x.example\\.mysite.example/">offer</a><img src="/a.png">'),
+    url: "https://www.mysite.example/guide/",
+  },
+}));
+expect("an unqualified link and a bare image block the page", dirty.verdict, "block");
+expect("the backslash link resolves to the host a browser opens",
+  dirty.checks.outbound_links.unqualified[0], "partner-x.example");
+expect("the image without alt and width is reported", dirty.checks.images.lacking.length, 1);
+
+const broad = await client.callTool({
+  name: "audit_page",
+  arguments: { html: article(longBody), url: "https://www.mysite.example/", cite_ok: ["github.io"] },
+});
+expect("a cite_ok entry covering a whole hosting suffix is refused", broad.isError, true);
+
+const twins = parse(await client.callTool({
+  name: "compare_pages",
+  arguments: { html_a: article(longBody), html_b: article(longBody) },
+}));
+expect("two identical pages are duplicates", twins.verdict, "block");
+
+const distinct = parse(await client.callTool({
+  name: "compare_pages",
+  arguments: {
+    html_a: "<main><p>Static sites are cheap to host. They scale without effort.</p></main>",
+    html_b: "<main><p>Index design follows the query pattern. Measure before adding one.</p></main>",
+  },
+}));
+expect("two different pages are not", distinct.verdict, "pass");
+
 await client.close();
 console.log(failures ? `\n${failures} smoke check(s) failed` : "\nall smoke checks passed");
 process.exit(failures ? 1 : 0);

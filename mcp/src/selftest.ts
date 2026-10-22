@@ -11,6 +11,11 @@ import {
   checkKeywords, checkTranslation, checkInternalLinks, checkClaims,
   contentHash, resolveLastmod, DEFAULT_PRIMARY_MIN_HITS,
 } from "./guards.js";
+import {
+  checkVisibleText, checkStructuredData, validateCiteOk, scanOutbound, checkImages,
+  checkFavicon, checkStockPhrases, checkDuplicateSentences,
+  DEFAULT_MIN_CHARS, DEFAULT_REQUIRE_TYPES, DEFAULT_PHRASES, DEFAULT_MAX_SHARE,
+} from "./audit.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -25,13 +30,40 @@ const CANDIDATES = [
 
 export const FIXTURES = CANDIDATES.find(existsSync) ?? CANDIDATES[0];
 
-type Verdict = "pass" | "block";
+type Verdict = "pass" | "block" | "wrong";
 
 interface Case { guard: string; name: string; expect: Verdict; input: Record<string, any>; }
+
+function outboundVerdict(i: Record<string, any>): Verdict {
+  // A too-broad cite_ok is refused before the page is read; see the Python side.
+  const { domains, problems } = validateCiteOk(i.cite_ok ?? []);
+  if (problems.length) return "block";
+  const [hosts] = scanOutbound(i.html, i.url, domains);
+  // Blocking for the wrong reason is not passing.
+  if (i.expect_hosts && JSON.stringify(hosts) !== JSON.stringify(i.expect_hosts)) return "wrong";
+  return hosts.length ? "block" : "pass";
+}
+
+const blockIf = (problems: string[]): Verdict => (problems.length ? "block" : "pass");
 
 export function verdict(c: Case): Verdict {
   const i = c.input;
   switch (c.guard) {
+    case "visible_text":
+      return blockIf(checkVisibleText(i.html, i.min_chars ?? DEFAULT_MIN_CHARS).problems);
+    case "structured_data":
+      return blockIf(checkStructuredData(
+        i.html, i.require_types ?? DEFAULT_REQUIRE_TYPES, i.require_date_modified ?? true).problems);
+    case "outbound_links":
+      return outboundVerdict(i);
+    case "images":
+      return blockIf(checkImages(i.html).problems);
+    case "favicon":
+      return blockIf(checkFavicon(i.html, i.url).problems);
+    case "stock_phrases":
+      return blockIf(checkStockPhrases(i.html, i.phrases ?? DEFAULT_PHRASES).problems);
+    case "duplicate_sentences":
+      return blockIf(checkDuplicateSentences(i.html_a, i.html_b, i.max_share ?? DEFAULT_MAX_SHARE).problems);
     case "keywords": {
       const { problems } = checkKeywords(
         i.html, i.keywords, i.scope ?? null, i.exclude_classes ?? [],

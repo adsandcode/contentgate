@@ -363,6 +363,762 @@
         "today": "2026-09-17",
         "expect_lastmod": "2026-09-17"
       }
+    },
+
+    {
+      "guard": "visible_text",
+      "name": "an article written into the page by a script reads as empty with JavaScript off",
+      "expect": "block",
+      "input": {
+        "min_chars": 40,
+        "html": "<html><body><nav>Home Guides Pricing About</nav><main><div id=\"app\"></div><script>document.getElementById(\"app\").innerHTML = \"<p>A long article about choosing a static site generator, injected after load.</p>\";</script></main><footer>Copyright notice</footer></body></html>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "the same article rendered on the server passes",
+      "expect": "pass",
+      "input": {
+        "min_chars": 40,
+        "html": "<html><body><nav>Home Guides Pricing About</nav><main><p>A long article about choosing a static site generator, rendered on the server.</p></main><footer>Copyright notice</footer></body></html>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "only main is read when the page has one",
+      "expect": "block",
+      "input": {
+        "min_chars": 40,
+        "html": "<body><aside>Sidebar text that is long enough to pass the threshold on its own if it counted.</aside><main><p>Short body.</p></main></body>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "navigation and footer text do not count",
+      "expect": "block",
+      "input": {
+        "min_chars": 40,
+        "html": "<body><nav>Long navigation text, long navigation text, long navigation text</nav><p>Tiny.</p><footer>Long footer text, long footer text, long footer text</footer></body>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "a wbr line-break hint adds no characters",
+      "expect": "block",
+      "input": {
+        "min_chars": 38,
+        "html": "<main><p>Super<wbr>cali<wbr>fragi<WBR/>listic<wbr>expi<wbr>ali<wbr>docious</p></main>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "zero-width spaces are not characters",
+      "expect": "block",
+      "input": {
+        "min_chars": 30,
+        "html": "<main><p>Zero\u200bwidth\u200bspaces\u200bare\u200bnot\u200bletters</p></main>"
+      }
+    },
+    {
+      "guard": "visible_text",
+      "name": "an entity counts as the one character it stands for",
+      "expect": "block",
+      "input": {
+        "min_chars": 30,
+        "html": "<main><p>Wait&hellip; what&hellip; really&hellip; yes&hellip;</p></main>"
+      }
+    },
+
+    {
+      "guard": "structured_data",
+      "name": "Article, BreadcrumbList, nested Organization and dateModified pass",
+      "expect": "pass",
+      "input": {
+        "html": "<head><script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"H\",\"dateModified\":\"2026-09-01\",\"author\":{\"@type\":\"Person\",\"name\":\"A\"},\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}}</script><script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[]}</script></head>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a JSON-LD block with a trailing comma is broken",
+      "expect": "block",
+      "input": {
+        "html": "<head><script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"dateModified\":\"2026-09-01\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}}</script><script type=\"application/ld+json\">{\"@type\":\"BreadcrumbList\"}</script><script type=\"application/ld+json\">{\"@type\":\"FAQPage\",}</script></head>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a missing BreadcrumbList is reported",
+      "expect": "block",
+      "input": {
+        "html": "<head><script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"dateModified\":\"2026-09-01\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}}</script></head>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "@type given as a list and items inside @graph are both read",
+      "expect": "pass",
+      "input": {
+        "html": "<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@graph\":[{\"@type\":[\"NewsArticle\",\"Article\"],\"dateModified\":\"2026-09-01\",\"publisher\":[{\"@type\":\"Organization\",\"name\":\"P\"}]},{\"@type\":\"BreadcrumbList\"}]}</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "an Organization author does not stand in for a required Person",
+      "expect": "block",
+      "input": {
+        "require_types": ["Article", "Person"],
+        "html": "<script type=\"application/ld+json\">{\"@graph\":[{\"@type\":\"Article\",\"dateModified\":\"2026-09-01\",\"author\":{\"@type\":\"Organization\",\"name\":\"P\"}}]}</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a ProfilePage author page is not required to be an Article",
+      "expect": "pass",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"ProfilePage\",\"dateModified\":\"2026-09-01\",\"mainEntity\":{\"@type\":\"Person\",\"name\":\"A\"}},{\"@type\":\"BreadcrumbList\"},{\"@type\":\"Organization\",\"name\":\"P\"}]</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "the same page marked as a plain WebPage still needs Article",
+      "expect": "block",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"WebPage\",\"dateModified\":\"2026-09-01\",\"mainEntity\":{\"@type\":\"Person\",\"name\":\"A\"}},{\"@type\":\"BreadcrumbList\"},{\"@type\":\"Organization\",\"name\":\"P\"}]</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "no dateModified is reported",
+      "expect": "block",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"Article\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}},{\"@type\":\"BreadcrumbList\"}]</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "the dateModified requirement can be switched off",
+      "expect": "pass",
+      "input": {
+        "require_date_modified": false,
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"Article\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}},{\"@type\":\"BreadcrumbList\"}]</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "NaN is not JSON even though Python's json module accepts it",
+      "expect": "block",
+      "input": {
+        "html": "<script type=\"application/ld+json\">{\"@type\":\"Article\",\"wordCount\":NaN,\"dateModified\":\"2026-09-01\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}}</script><script type=\"application/ld+json\">{\"@type\":\"BreadcrumbList\"}</script>"
+      }
+    },
+    {
+      "guard": "structured_data",
+      "name": "a dateModified in an ordinary script is not structured data",
+      "expect": "block",
+      "input": {
+        "html": "<script type=\"application/ld+json\">[{\"@type\":\"Article\",\"publisher\":{\"@type\":\"Organization\",\"name\":\"P\"}},{\"@type\":\"BreadcrumbList\"}]</script><script>window.meta = {\"dateModified\":\"2026-09-01\"};</script>"
+      }
+    },
+
+    {
+      "guard": "outbound_links",
+      "name": "an external link with no rel is reported",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<p>Read the <a href=\"https://partner-x.example/join\">partner offer</a>.</p>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "rel sponsored qualifies the link",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a rel=\"sponsored noopener\" href=\"https://partner-x.example/join\">partner offer</a>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "rel ugc qualifies a link in a user comment",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<div class=\"comment\"><a rel=\"ugc\" href=\"https://partner-x.example/\">my site</a></div>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "rel nofollow qualifies the link",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a rel=\"nofollow\" href=\"https://partner-x.example/\">x</a>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a citation of a site listed in cite_ok needs no rel",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "cite_ok": ["gov.example"],
+        "html": "<a href=\"https://health.gov.example/report\" rel=\"noopener\">official report</a>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a cite_ok domain used as a subdomain of another site is not that domain",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "cite_ok": ["gov.example"],
+        "html": "<a href=\"https://health.gov.example.partner-x.example/\">x</a>",
+        "expect_hosts": ["health.gov.example.partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a host that merely ends in the same letters as a cite_ok domain is not under it",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "cite_ok": ["gov.example"],
+        "html": "<a href=\"https://evilgov.example/\">x</a>",
+        "expect_hosts": ["evilgov.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a citation not listed in cite_ok is still reported",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https://docs.python.org/3/library/html.parser.html\">html.parser</a>",
+        "expect_hosts": ["docs.python.org"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a cite_ok entry written as a URL with www is normalised to its host",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "cite_ok": ["https://www.Docs.Python.org/3/"],
+        "html": "<a href=\"https://docs.python.org/3/library/html.parser.html\">html.parser</a>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "nofollow in the URL and a class named sponsored-card are not rel values",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a class=\"sponsored-card\" href=\"https://partner-x.example/nofollow-guide\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "with two rel attributes the browser keeps the first",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https://partner-x.example/\" rel=\"noopener\" rel=\"nofollow\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "www, subdomains, relative paths, fragments and mailto are internal or not links",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https://www.mysite.example/b/\">b</a><a href=\"https://m.mysite.example/\">m</a><a href=\"/c/\">c</a><a href=\"../d/\">d</a><a href=\"#top\">top</a><a href=\"mailto:hi@mysite.example\">mail</a><a href=\"tel:+15550100\">call</a><a href=\"javascript:void(0)\">js</a>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a scheme-relative link to another host is external",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"//partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a backslash ends the host, so it is not under the cite_ok domain that follows",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "cite_ok": ["gov.example"],
+        "html": "<a href=\"https://partner-x.example\\.gov.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a backslash ends the host, so it is not under the page's own domain",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https://partner-x.example\\.mysite.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a backslash before an at sign keeps the real host in front",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https://partner-x.example\\@mysite.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "two backslashes after the scheme start the host",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https:\\\\partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "three slashes after the scheme still start the host",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https:///partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "slash backslash at the start is scheme-relative",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"/\\partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "three leading slashes are scheme-relative too",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"///partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "http: without slashes on an https page starts the host",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"http:partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "https: without slashes on an https page is a relative path",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https:partner-x.example/\">x</a>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a comma-separated rel with sponsored qualifies the link",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a rel=\"sponsored,noopener\" href=\"https://partner-x.example/\">x</a>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a comma-separated rel without a qualifier does not",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a rel=\"noopener,external\" href=\"https://partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "marked-section markup does not crash the parser or hide the link after it",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<![foo]><![ CDATA[ x ]]><a href=\"https://partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a sponsored link inside a conditional comment is read and passes",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<![if !IE]><a rel=\"sponsored\" href=\"https://partner-x.example/\">x</a><![endif]>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a second-level country registry in cite_ok is refused",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "cite_ok": ["co.uk"],
+        "html": "<p>No links.</p>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a shared hosting suffix in cite_ok is refused",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "cite_ok": ["pages.dev"],
+        "html": "<p>No links.</p>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a URL inside a script string is not a link, the real one after it is",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<script>var tpl = '<a href=\"https://tracker.example/\">';</script><a href=\"https://partner-x.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a link inside an HTML comment does not count",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<p>Text.</p><!-- <a href=\"https://partner-x.example/\">old offer</a> -->"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a bare less-than sign in the text does not swallow the next link",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<p>if a < b then <a href=\"https://partner-x.example/\">x</a></p>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "an upper-case scheme and host are read case-insensitively",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"HTTPS://Partner-X.example/\">x</a>",
+        "expect_hosts": ["partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "an http link to the page's own host is internal",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"http://www.mysite.example/old/\">x</a>"
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "the page's domain used as a subdomain of another site is external",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https://mysite.example.partner-x.example/\">x</a>",
+        "expect_hosts": ["mysite.example.partner-x.example"]
+      }
+    },
+    {
+      "guard": "outbound_links",
+      "name": "a host that ends in the page's domain without a dot is external",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<a href=\"https://notmysite.example/\">x</a>",
+        "expect_hosts": ["notmysite.example"]
+      }
+    },
+
+    {
+      "guard": "images",
+      "name": "an image without alt",
+      "expect": "block",
+      "input": {"html": "<main><img src=\"/a.png\" width=\"600\" height=\"400\"></main>"}
+    },
+    {
+      "guard": "images",
+      "name": "an image without width",
+      "expect": "block",
+      "input": {"html": "<main><img src=\"/a.png\" alt=\"Response times by region\"></main>"}
+    },
+    {
+      "guard": "images",
+      "name": "an empty alt marks a decorative image and is accepted",
+      "expect": "pass",
+      "input": {"html": "<main><img src=\"/divider.png\" alt=\"\" width=\"600\" height=\"4\"></main>"}
+    },
+    {
+      "guard": "images",
+      "name": "a page without images passes",
+      "expect": "pass",
+      "input": {"html": "<main><p>Text only.</p></main>"}
+    },
+    {
+      "guard": "images",
+      "name": "an img inside a script string is not an image",
+      "expect": "pass",
+      "input": {"html": "<script>const tpl = '<img src=\"/x.png\">';</script><img src=\"/a.png\" alt=\"A\" width=\"10\" height=\"10\">"}
+    },
+    {
+      "guard": "images",
+      "name": "a self-closing image without width",
+      "expect": "block",
+      "input": {"html": "<img src=\"/a.png\" alt=\"A\" />"}
+    },
+    {
+      "guard": "images",
+      "name": "data-alt is not alt",
+      "expect": "block",
+      "input": {"html": "<img src=\"/a.png\" data-alt=\"A\" width=\"10\" height=\"10\">"}
+    },
+
+    {
+      "guard": "favicon",
+      "name": "a home page that declares no favicon",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><title>Home</title></head><body><p>Hi</p></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "an ICO favicon on the home page",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"icon\" href=\"/favicon.ico\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "only an SVG favicon, a format Google Search does not list",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "an SVG favicon with a PNG beside it",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"icon\" href=\"/favicon.svg\"><link rel=\"icon\" href=\"/favicon-48.png\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "apple-touch-icon with a PNG",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "shortcut icon contains the icon token",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example",
+        "html": "<html><head><link rel=\"shortcut icon\" href=\"/favicon.ico\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "an inner page is not required to declare a favicon",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/guide/",
+        "html": "<html><head><title>Guide</title></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "a favicon declared in the body is not in the head",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><title>Home</title></head><body><link rel=\"icon\" href=\"/favicon.ico\"></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "a cache-busting query string does not hide the extension",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/?utm_source=x",
+        "html": "<html><head><link rel=\"icon\" href=\"/favicon.png?v=3\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": ".png in the query string does not make an SVG supported",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"icon\" href=\"/icon.svg?fallback=.png\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "apple-touch-icon-precomposed is a documented rel value",
+      "expect": "pass",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"apple-touch-icon-precomposed\" href=\"/touch.png\"></head><body></body></html>"
+      }
+    },
+    {
+      "guard": "favicon",
+      "name": "mask-icon contains the letters icon but is not an icon rel",
+      "expect": "block",
+      "input": {
+        "url": "https://www.mysite.example/",
+        "html": "<html><head><link rel=\"mask-icon\" href=\"/mask.png\"></head><body></body></html>"
+      }
+    },
+
+    {
+      "guard": "stock_phrases",
+      "name": "a default stock phrase in the body",
+      "expect": "block",
+      "input": {"html": "<main><p>總的來說，這個方案適合小型團隊。</p></main>"}
+    },
+    {
+      "guard": "stock_phrases",
+      "name": "plain copy without stock phrases",
+      "expect": "pass",
+      "input": {"html": "<main><p>這個方案適合五人以下的團隊，月費固定。</p></main>"}
+    },
+    {
+      "guard": "stock_phrases",
+      "name": "a configured English phrase matches case-insensitively",
+      "expect": "block",
+      "input": {
+        "phrases": ["in today's fast-paced world"],
+        "html": "<main><p>In Today's Fast-Paced World, teams ship weekly.</p></main>"
+      }
+    },
+    {
+      "guard": "stock_phrases",
+      "name": "a phrase inside a script is not copy",
+      "expect": "pass",
+      "input": {"html": "<main><p>Plain text.</p><script>var s = \"總的來說\";</script></main>"}
+    },
+    {
+      "guard": "stock_phrases",
+      "name": "a phrase in the navigation is not body copy",
+      "expect": "pass",
+      "input": {"html": "<body><nav>總的來說</nav><p>正文內容。</p></body>"}
+    },
+    {
+      "guard": "stock_phrases",
+      "name": "a wbr inside a phrase does not hide it",
+      "expect": "block",
+      "input": {"html": "<main><p>總的<wbr>來說，這個方案適合小型團隊。</p></main>"}
+    },
+
+    {
+      "guard": "duplicate_sentences",
+      "name": "two identical pages",
+      "expect": "block",
+      "input": {
+        "html_a": "<main><p>這是一段夠長的測試句子內容。另一句完全不同的說明文字。</p></main>",
+        "html_b": "<main><p>這是一段夠長的測試句子內容。另一句完全不同的說明文字。</p></main>"
+      }
+    },
+    {
+      "guard": "duplicate_sentences",
+      "name": "two different pages",
+      "expect": "pass",
+      "input": {
+        "html_a": "<main><p>Static sites are cheap to host. They scale without effort.</p></main>",
+        "html_b": "<main><p>Index design follows the query pattern. Measure before adding one.</p></main>"
+      }
+    },
+    {
+      "guard": "duplicate_sentences",
+      "name": "a short page copied whole into a long one is caught from the short side",
+      "expect": "block",
+      "input": {
+        "html_a": "<main><p>Static sites are cheap to host. They scale without effort. Builds take two minutes on a laptop. Deploys are a file copy to the edge network. Rollbacks are another copy of the previous build. Caching rules live in one plain text file. Previews come for free with every branch.</p></main>",
+        "html_b": "<main><p>Static sites are cheap to host.</p></main>"
+      }
+    },
+    {
+      "guard": "duplicate_sentences",
+      "name": "sentences shorter than ten characters are ignored",
+      "expect": "pass",
+      "input": {
+        "html_a": "<main><p>Yes. No. Maybe. Static sites are cheap to host.</p></main>",
+        "html_b": "<main><p>Yes. No. Maybe. Databases need careful backups.</p></main>"
+      }
+    },
+    {
+      "guard": "duplicate_sentences",
+      "name": "shared navigation and footer are not compared",
+      "expect": "pass",
+      "input": {
+        "html_a": "<nav>Home. Guides. Pricing. About this site and its authors.</nav><main><p>Static sites are cheap to host.</p></main><footer>Copyright notice for every page on this site.</footer>",
+        "html_b": "<nav>Home. Guides. Pricing. About this site and its authors.</nav><main><p>Databases need careful backups.</p></main><footer>Copyright notice for every page on this site.</footer>"
+      }
+    },
+    {
+      "guard": "duplicate_sentences",
+      "name": "Latin sentences split on a full stop and a space",
+      "expect": "block",
+      "input": {
+        "html_a": "<main><p>Static sites are cheap to host. They scale without effort. Our build takes two minutes.</p></main>",
+        "html_b": "<main><p>Static sites are cheap to host. Databases need careful backups. We deploy on Fridays.</p></main>"
+      }
+    },
+    {
+      "guard": "duplicate_sentences",
+      "name": "a decimal point does not end a sentence",
+      "expect": "pass",
+      "input": {
+        "html_a": "<main><p>Pricing rose to 4.99 per month for the basic plan. Support is included.</p></main>",
+        "html_b": "<main><p>Old price.</p><p>99 per month for the basic plan. Something else entirely here.</p></main>"
+      }
     }
   ]
 }

@@ -12,13 +12,59 @@ import json
 import pathlib
 
 from .guards import keywords, translation, internal_links, claims, lastmod
+from .guards import (crawler_text, structured_data, outbound_links, images, favicon,
+                     stock_phrases, duplicate_sentences)
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "cases.json"
 
 
+def _outbound_verdict(i):
+    # A cite_ok entry that would exempt a whole registry is refused before the
+    # page is read; the guard gives no verdict on the content, which counts as
+    # blocking the deploy.
+    allowed, problems = outbound_links.validate_cite_ok(i.get("cite_ok", []))
+    if problems:
+        return "block"
+    hosts, _cited = outbound_links.scan(i["html"], i["url"], allowed)
+    # Blocking for the wrong reason is not passing: when a case names the hosts
+    # it expects to be reported, any other list is a failure of its own.
+    if "expect_hosts" in i and hosts != i["expect_hosts"]:
+        return "wrong"
+    return "block" if hosts else "pass"
+
+
 def _verdict(case):
-    """Return 'pass' or 'block' for one case."""
+    """Return 'pass' or 'block' for one case ('wrong' when a block names the
+    wrong hosts)."""
     g, i = case["guard"], case["input"]
+
+    if g == "visible_text":
+        problems, _ = crawler_text.check(i["html"], i.get("min_chars", crawler_text.DEFAULT_MIN_CHARS))
+        return "block" if problems else "pass"
+
+    if g == "structured_data":
+        problems, _ = structured_data.check(
+            i["html"], i.get("require_types", structured_data.DEFAULT_REQUIRE_TYPES),
+            i.get("require_date_modified", True))
+        return "block" if problems else "pass"
+
+    if g == "outbound_links":
+        return _outbound_verdict(i)
+
+    if g == "images":
+        return "block" if images.check(i["html"])[0] else "pass"
+
+    if g == "favicon":
+        return "block" if favicon.check(i["html"], i["url"])[0] else "pass"
+
+    if g == "stock_phrases":
+        problems, _ = stock_phrases.check(i["html"], i.get("phrases", stock_phrases.DEFAULT_PHRASES))
+        return "block" if problems else "pass"
+
+    if g == "duplicate_sentences":
+        problems, _ = duplicate_sentences.check(
+            i["html_a"], i["html_b"], i.get("max_share", duplicate_sentences.DEFAULT_MAX_SHARE))
+        return "block" if problems else "pass"
 
     if g == "keywords":
         problems, _ = keywords.check(

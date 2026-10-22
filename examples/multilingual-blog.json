@@ -36,6 +36,25 @@
       "strip_classes": ["build-stamp", "visitor-count"],
       "strip_patterns": [],
       "bulk_change_threshold": 0.3
+    },
+    "page_audit": {
+      "enabled": true,
+      "site_dir": "site",
+      "site_url": "https://www.example.org",
+      "pages": "**/*.html",
+      "skip": ["404.html"],
+      "min_chars": 1200,
+      "require_types": ["Article", "BreadcrumbList", "Organization"],
+      "require_date_modified": true,
+      "cite_ok": ["docs.python.org"],
+      "stock_phrases": ["in today's fast-paced world", "it is worth noting that"]
+    },
+    "duplicate_sentences": {
+      "enabled": true,
+      "site_dir": "site",
+      "pages": "**/*.html",
+      "skip": ["404.html"],
+      "max_share": 0.15
     }
   }
 }
